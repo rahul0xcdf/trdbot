@@ -1,0 +1,99 @@
+name: Market Intelligence Bot
+
+on:
+  # ── Scheduled runs (all times in UTC) ──────────────────────────────────────
+  schedule:
+    # Pre-market India — 8:30 AM IST = 3:00 AM UTC  (Mon–Fri)
+    - cron: "0 3 * * 1-5"
+
+    # Pre-market US — 8:30 AM EST = 1:30 PM UTC  (Mon–Fri)
+    - cron: "30 13 * * 1-5"
+
+    # End-of-day digest — 6:00 PM IST = 12:30 PM UTC  (Mon–Fri)
+    - cron: "30 12 * * 1-5"
+
+  # ── Manual trigger from GitHub UI (for testing) ────────────────────────────
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: "Strategy to use"
+        required: false
+        default: "balanced"
+        type: choice
+        options:
+          - balanced
+          - momentum
+          - conservative
+          - sentiment_first
+      model:
+        description: "OpenRouter model"
+        required: false
+        default: "google/gemini-flash-1.5"
+        type: string
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # ── 1. Checkout repo ──────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Python setup ───────────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ── 3. Install dependencies ───────────────────────────────────────────
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── 4. Determine which scheduled run this is ──────────────────────────
+      #    Sets RUN_TYPE env var used in bot.py for message headers
+      - name: Set run context
+        run: |
+          HOUR=$(date -u +%H)
+          MIN=$(date -u +%M)
+          if [ "$HOUR" = "03" ]; then
+            echo "RUN_TYPE=premarket_india" >> $GITHUB_ENV
+          elif [ "$HOUR" = "13" ]; then
+            echo "RUN_TYPE=premarket_us" >> $GITHUB_ENV
+          else
+            echo "RUN_TYPE=eod_digest" >> $GITHUB_ENV
+          fi
+
+      # ── 5. Run the bot ────────────────────────────────────────────────────
+      - name: Run Market Bot
+        env:
+          OPENROUTER_API_KEY:  ${{ secrets.OPENROUTER_API_KEY }}
+          TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
+          GNEWS_API_KEY:       ${{ secrets.GNEWS_API_KEY }}
+          RUN_TYPE:            ${{ env.RUN_TYPE }}
+          # Strategy: manual input overrides repo variable, which overrides default
+          STRATEGY: >-
+            ${{
+              github.event.inputs.strategy ||
+              vars.ACTIVE_STRATEGY ||
+              'balanced'
+            }}
+          OPENROUTER_MODEL: >-
+            ${{
+              github.event.inputs.model ||
+              vars.OPENROUTER_MODEL ||
+              'google/gemini-flash-1.5'
+            }}
+        run: python bot.py
+
+      # ── 6. On failure — notify Telegram ───────────────────────────────────
+      - name: Notify on failure
+        if: failure()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="⚠️ Market Bot failed on GitHub Actions. Check: ${{ github.server_url }}/${{ github.repository }}/actions" \
+            -d parse_mode="HTML"
