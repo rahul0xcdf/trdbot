@@ -1,378 +1,255 @@
 """
-Market Intelligence Bot
-GitHub Actions + Gemini API + Telegram
-Supports: NSE (India) and US Markets
+Market Intelligence Bot — orchestrator.
+
+Runs on GitHub Actions. A RUN_TYPE env var (set per cron schedule) selects
+which intraday flow to run. Each flow fetches ONLY what it needs so we don't,
+say, scrape the option chain at the EOD run.
+
+  RUN_TYPE:
+    premarket      → 8:15 AM IST  — gap, VIX, PCR/max pain, stocks to watch
+    opening        → 9:30 AM IST  — short, actionable open read
+    midmorning     → 11:00 AM IST — trend check + OI
+    european_open  → 12:30 PM IST — trend check + OI
+    london_us      → 1:30 PM IST  — trend check + OI
+    exit_reminder  → 2:45 PM IST  — light: square-off nudge
+    eod            → 4:00 PM IST  — FII/DII + OI for tomorrow
+    vix_check      → every 30 min — SILENT unless VIX > 18 or |change| > 10%
+
+Modules do the real work; this file just wires them together.
 """
 
 import os
-import json
-import requests
-import yfinance as yf
-from datetime import datetime, timedelta
-import pytz
+import sys
+
+from modules import nse_data, market_data, news, ai_engine, telegram, signals
+from modules.market_data import WATCHLIST_INDIA, WATCHLIST_STOCKS_TO_SCAN
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-GEMINI_API_KEY      = os.environ["GEMINI_API_KEY"]
-TELEGRAM_BOT_TOKEN  = os.environ["TELEGRAM_BOT_TOKEN"]
-TELEGRAM_CHAT_ID    = os.environ["TELEGRAM_CHAT_ID"]
+TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
-# Load active strategy from env (default: balanced)
-STRATEGY = os.environ.get("STRATEGY", "balanced")
+RUN_TYPE = os.environ.get("RUN_TYPE", "premarket").strip()
+STRATEGY = os.environ.get("STRATEGY", "nifty_intraday").strip()
 
-# Gemini model — swap anytime without changing logic
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+VIX_ALERT_LEVEL = 18.0
+VIX_ALERT_CHANGE_PCT = 10.0
 
 # ── Strategy Configs ──────────────────────────────────────────────────────────
 
 STRATEGIES = {
     "balanced": {
         "name": "Balanced",
-        "description": "Equal weight on sentiment and technicals",
         "min_sentiment_score": 0.55,
         "min_signal_strength": 0.6,
-        "max_iv_rank": 70,
-        "delta_range": [0.30, 0.50],
-        "dte_range": [21, 45],
         "risk_per_trade_pct": 2.0,
-        "watchlist": ["RELIANCE.NS", "NIFTY50=F", "TCS.NS", "INFY.NS", "HDFCBANK.NS",
+        "dte_range": [21, 45],
+        "watchlist": ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS",
                       "AAPL", "NVDA", "SPY", "QQQ", "TSLA"],
     },
     "momentum": {
         "name": "Momentum",
-        "description": "Follows strong price trends + bullish sentiment",
         "min_sentiment_score": 0.65,
         "min_signal_strength": 0.7,
-        "max_iv_rank": 50,
-        "delta_range": [0.40, 0.60],
-        "dte_range": [14, 30],
         "risk_per_trade_pct": 3.0,
+        "dte_range": [14, 30],
         "watchlist": ["RELIANCE.NS", "TATAMOTORS.NS", "BAJFINANCE.NS",
                       "NVDA", "META", "AMZN", "QQQ"],
     },
     "conservative": {
         "name": "Conservative",
-        "description": "Low risk, high conviction only",
         "min_sentiment_score": 0.75,
         "min_signal_strength": 0.80,
-        "max_iv_rank": 40,
-        "delta_range": [0.20, 0.35],
-        "dte_range": [30, 60],
         "risk_per_trade_pct": 1.0,
-        "watchlist": ["NIFTY50=F", "SPY", "TCS.NS", "HDFCBANK.NS"],
+        "dte_range": [30, 60],
+        "watchlist": ["SPY", "TCS.NS", "HDFCBANK.NS"],
     },
     "sentiment_first": {
         "name": "Sentiment-First",
-        "description": "AI sentiment drives everything",
         "min_sentiment_score": 0.80,
         "min_signal_strength": 0.5,
-        "max_iv_rank": 80,
-        "delta_range": [0.25, 0.55],
-        "dte_range": [7, 21],
         "risk_per_trade_pct": 2.5,
+        "dte_range": [7, 21],
         "watchlist": ["RELIANCE.NS", "ZOMATO.NS", "PAYTM.NS",
                       "TSLA", "NVDA", "COIN", "MSTR"],
     },
+    "nifty_intraday": {
+        "name": "Nifty Intraday",
+        "min_sentiment_score": 0.65,
+        "min_signal_strength": 0.70,
+        "risk_per_trade_pct": 1.5,
+        "dte_range": [0, 7],  # weekly options
+        "watchlist": WATCHLIST_INDIA,
+    },
 }
 
-# ── Market Data ───────────────────────────────────────────────────────────────
 
-def fetch_market_data(symbols: list[str]) -> list[dict]:
-    """Fetch price, volume, and basic technicals for each symbol."""
-    results = []
-    for symbol in symbols:
+# ── Shared helpers ────────────────────────────────────────────────────────────
+
+def _strategy() -> dict:
+    return STRATEGIES.get(STRATEGY, STRATEGIES["nifty_intraday"])
+
+
+def _send(message: str):
+    telegram.send_telegram(message, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
+
+
+def _collect_headlines() -> list[str]:
+    """Indian RSS headlines first, then global — as plain title strings."""
+    indian = [h["title"] for h in news.fetch_indian_news()]
+    if len(indian) >= 8:
+        return indian[:12]
+    return (indian + news.fetch_global_news())[:12]
+
+
+def _persist_signals(conn, analysis: dict, market_data_rows: list[dict]):
+    """Log qualifying AI signals to SQLite for later backtesting."""
+    price_by_symbol = {d["symbol"]: d["price"] for d in market_data_rows}
+    for s in analysis.get("top_signals", []):
+        symbol = s.get("symbol")
+        entry = price_by_symbol.get(symbol)
+        if entry is None:
+            continue
         try:
-            ticker = yf.Ticker(symbol)
-            hist   = ticker.history(period="10d", interval="1d")
-            info   = ticker.fast_info
-
-            if hist.empty:
-                continue
-
-            closes   = hist["Close"].tolist()
-            volumes  = hist["Volume"].tolist()
-            today    = closes[-1]
-            prev     = closes[-2] if len(closes) >= 2 else today
-            pct_chg  = ((today - prev) / prev) * 100
-
-            # Simple 5-day momentum
-            momentum = ((today - closes[0]) / closes[0]) * 100 if len(closes) >= 5 else 0.0
-
-            # Volume spike vs 5-day avg
-            avg_vol    = sum(volumes[-6:-1]) / 5 if len(volumes) >= 6 else volumes[-1]
-            vol_spike  = volumes[-1] / avg_vol if avg_vol > 0 else 1.0
-
-            results.append({
-                "symbol":    symbol,
-                "price":     round(today, 2),
-                "change_pct": round(pct_chg, 2),
-                "momentum_5d": round(momentum, 2),
-                "volume_spike": round(vol_spike, 2),
-                "high_52w":  getattr(info, "year_high", None),
-                "low_52w":   getattr(info, "year_low", None),
-            })
-        except Exception as e:
-            print(f"  [WARN] {symbol}: {e}")
-
-    return results
-
-
-def fetch_news_headlines() -> list[str]:
-    """
-    Fetch recent finance headlines.
-    Uses GNews free API (no key needed for basic use).
-    Add GNEWS_API_KEY secret for higher limits.
-    """
-    api_key = os.environ.get("GNEWS_API_KEY", "")
-    headlines = []
-
-    topics = ["stock market", "options trading", "NSE India", "Federal Reserve"]
-    for topic in topics:
-        try:
-            url = (
-                f"https://gnews.io/api/v4/search?q={requests.utils.quote(topic)}"
-                f"&lang=en&max=3&token={api_key}"
-            ) if api_key else (
-                f"https://gnews.io/api/v4/top-headlines?topic=business&lang=en&max=5"
-                f"&token=demo"
+            signals.save_signal(
+                conn,
+                strategy=STRATEGY,
+                symbol=symbol,
+                direction=s.get("direction", "HOLD"),
+                strength=s.get("signal_strength"),
+                sentiment=s.get("sentiment_score"),
+                price_entry=entry,
             )
-            r = requests.get(url, timeout=8)
-            if r.status_code == 200:
-                articles = r.json().get("articles", [])
-                for a in articles:
-                    headlines.append(a.get("title", ""))
         except Exception as e:
-            print(f"  [WARN] News fetch: {e}")
-
-    # Fallback — always have something even if API fails
-    if not headlines:
-        headlines = [
-            "Markets open with mixed signals amid global uncertainty",
-            "Options activity surges ahead of Fed meeting",
-            "Nifty consolidates near key support levels",
-        ]
-
-    return list(set(h for h in headlines if h))[:12]
+            print(f"[WARN] _persist_signals {symbol}: {e}")
 
 
-# ── AI Analysis (Gemini) ──────────────────────────────────────────────────────
-
-def analyse_with_ai(market_data: list[dict], headlines: list[str], strategy: dict) -> dict:
-    """
-    Send market data + headlines to Gemini.
-    Returns structured analysis with signals.
-    """
-
-    market_summary = "\n".join([
-        f"- {d['symbol']}: ${d['price']} ({'+' if d['change_pct'] >= 0 else ''}{d['change_pct']}%) "
-        f"| 5d momentum: {d['momentum_5d']}% | vol spike: {d['volume_spike']:.1f}x"
-        for d in market_data
-    ])
-
-    news_summary = "\n".join([f"- {h}" for h in headlines[:8]])
-
-    prompt = f"""You are a market intelligence analyst. Analyse the data below and return a JSON object.
-
-## Active Strategy: {strategy['name']}
-- Min sentiment score to trigger signal: {strategy['min_sentiment_score']}
-- Preferred delta range: {strategy['delta_range']}
-- Preferred DTE: {strategy['dte_range'][0]}–{strategy['dte_range'][1]} days
-- Risk per trade: {strategy['risk_per_trade_pct']}%
-
-## Today's Market Data
-
-{market_summary}
-
-## Recent Headlines
-{news_summary}
-
-## Instructions
-Return ONLY valid JSON — no markdown, no explanation. Use this exact schema:
-
-{{
-  "market_mood": "bullish | bearish | neutral | mixed",
-  "mood_confidence": 0.0-1.0,
-  "summary": "2-3 sentence market summary for a trader",
-  "top_signals": [
-    {{
-      "symbol": "TICKER",
-      "direction": "CALL | PUT | HOLD",
-      "signal_strength": 0.0-1.0,
-      "sentiment_score": 0.0-1.0,
-      "reasoning": "One clear sentence why",
-      "suggested_action": "Buy CALL | Buy PUT | Sell covered CALL | Hold | Avoid",
-      "suggested_strike_hint": "ATM | 5% OTM | 2% ITM",
-      "suggested_dte": 21
-    }}
-  ],
-  "key_risks": ["risk 1", "risk 2", "risk 3"],
-  "sector_rotation": "Where money seems to be moving",
-  "vix_comment": "Comment on volatility environment",
-  "skip_trading_today": false,
-  "skip_reason": ""
-}}
-
-Only include signals where signal_strength >= {strategy['min_signal_strength']} and sentiment_score >= {strategy['min_sentiment_score']}.
-If no signals qualify, return empty top_signals array and set skip_trading_today to true.
-"""
-
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.3,
-            # Budget must cover the whole JSON. Gemini 2.5 is a thinking model,
-            # so give headroom and disable thinking (below) to avoid truncation.
-            "maxOutputTokens": 4096,
-            # Ask for native JSON — no markdown fences to strip, no truncation
-            # from stray prose.
-            "responseMimeType": "application/json",
-            # Thinking tokens draw from maxOutputTokens; disable so the full
-            # budget goes to the actual answer.
-            "thinkingConfig": {"thinkingBudget": 0},
-        },
-    }
-
-    r = requests.post(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
-        headers={"Content-Type": "application/json"},
-        params={"key": GEMINI_API_KEY},
-        json=payload,
-        timeout=30,
+def _log_snapshot(conn, nse: dict, fii_dii: dict | None = None):
+    chain = nse.get("nifty_chain") or {}
+    vix = nse.get("vix") or {}
+    fii = (fii_dii or nse.get("fii_dii") or {})
+    signals.log_nse_snapshot(
+        conn,
+        timestamp=None,
+        pcr=chain.get("pcr"),
+        vix=vix.get("value"),
+        max_pain=chain.get("max_pain"),
+        fii_net=fii.get("fii_net_buy_sell"),
+        dii_net=fii.get("dii_net_buy_sell"),
     )
-    r.raise_for_status()
-
-    candidate = r.json()["candidates"][0]
-
-    # Guard against truncation / safety blocks so the failure is legible.
-    finish = candidate.get("finishReason")
-    if finish not in (None, "STOP"):
-        raise RuntimeError(f"Gemini did not finish cleanly (finishReason={finish})")
-
-    raw = candidate["content"]["parts"][0]["text"].strip()
-
-    # Strip any accidental markdown fences (harmless with responseMimeType set)
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    raw = raw.strip().rstrip("```").strip()
-
-    return json.loads(raw)
 
 
-# ── Telegram Messenger ────────────────────────────────────────────────────────
+# ── Flows ─────────────────────────────────────────────────────────────────────
 
-def send_telegram(message: str):
-    """Send a message to Telegram."""
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": True,
+def flow_premarket():
+    strategy = _strategy()
+    nse = {
+        "gift_nifty": market_data.get_gift_nifty(),
+        "vix": nse_data.get_india_vix(),
+        "nifty_chain": nse_data.get_nifty_options_chain(),
+        "fii_dii": nse_data.get_fii_dii_data(),
     }
-    r = requests.post(url, json=payload, timeout=10)
-    if r.status_code != 200:
-        print(f"  [ERROR] Telegram: {r.text}")
+    md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
+    headlines = _collect_headlines()
+    analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
+
+    conn = signals.init_db()
+    _persist_signals(conn, analysis, md)
+    _log_snapshot(conn, nse)
+
+    _send(telegram.format_premarket(analysis, md, nse, strategy))
+
+
+def flow_opening():
+    strategy = _strategy()
+    nse = {
+        "vix": nse_data.get_india_vix(),
+        "nifty_chain": nse_data.get_nifty_options_chain(),
+    }
+    md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
+    headlines = _collect_headlines()
+    analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
+    _send(telegram.format_opening_range(analysis, md, nse))
+
+
+def flow_midday(label: str):
+    strategy = _strategy()
+    nse = {
+        "vix": nse_data.get_india_vix(),
+        "nifty_chain": nse_data.get_nifty_options_chain(),
+    }
+    md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
+    headlines = _collect_headlines()
+    analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
+    _send(telegram.format_midday(analysis, md, nse, label=label))
+
+
+def flow_exit_reminder():
+    """Light run — no OI scrape; just a square-off nudge with a VIX read."""
+    strategy = _strategy()
+    nse = {"vix": nse_data.get_india_vix()}
+    md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
+    headlines = _collect_headlines()
+    analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
+    _send(telegram.format_midday(analysis, md, nse, label="Exit Reminder ⏰"))
+
+
+def flow_eod():
+    strategy = _strategy()
+    fii_dii = nse_data.get_fii_dii_data()
+    nse = {
+        "vix": nse_data.get_india_vix(),
+        "nifty_chain": nse_data.get_nifty_options_chain(),  # OI setup for tomorrow
+        "fii_dii": fii_dii,
+    }
+    md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
+    headlines = _collect_headlines()
+    analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
+
+    conn = signals.init_db()
+    _persist_signals(conn, analysis, md)
+    _log_snapshot(conn, nse, fii_dii=fii_dii)
+
+    _send(telegram.format_eod(analysis, md, nse, fii_dii))
+
+
+def flow_vix_check():
+    """Silent unless VIX is elevated. Never sends a message otherwise."""
+    vix = nse_data.get_india_vix()
+    if not vix or vix.get("value") is None:
+        print("[WARN] flow_vix_check: no VIX data — nothing to do")
+        return
+    value = vix["value"]
+    change = vix.get("change_pct") or 0.0
+    if value > VIX_ALERT_LEVEL or abs(change) > VIX_ALERT_CHANGE_PCT:
+        context = "Elevated VIX — manage risk on open intraday positions."
+        _send(telegram.format_vix_alert(value, change, context))
+        print(f"[OK] flow_vix_check: alert sent (VIX={value}, {change}%)")
     else:
-        print("  [OK] Message sent to Telegram")
+        print(f"[OK] flow_vix_check: VIX calm ({value}, {change}%) — staying silent")
 
 
-def format_message(analysis: dict, market_data: list[dict], strategy: dict) -> str:
-    """Format the analysis into a clean Telegram message."""
+# ── Dispatch ──────────────────────────────────────────────────────────────────
 
-    ist = pytz.timezone("Asia/Kolkata")
-    now = datetime.now(ist).strftime("%d %b %Y  %I:%M %p IST")
+FLOWS = {
+    "premarket": flow_premarket,
+    "opening": flow_opening,
+    "midmorning": lambda: flow_midday("Mid-Morning Check"),
+    "european_open": lambda: flow_midday("European Open Check"),
+    "london_us": lambda: flow_midday("London/US Check"),
+    "exit_reminder": flow_exit_reminder,
+    "eod": flow_eod,
+    "vix_check": flow_vix_check,
+}
 
-    mood_emoji = {
-        "bullish": "🟢", "bearish": "🔴",
-        "neutral": "🟡", "mixed": "🟠",
-    }.get(analysis.get("market_mood", "neutral"), "⚪")
-
-    lines = [
-        f"<b>📊 Market Digest — {now}</b>",
-        f"<b>Strategy:</b> {strategy['name']}",
-        "",
-        f"{mood_emoji} <b>Market Mood:</b> {analysis.get('market_mood','—').upper()} "
-        f"({int(analysis.get('mood_confidence', 0) * 100)}% confidence)",
-        "",
-        f"<b>Summary</b>",
-        analysis.get("summary", "—"),
-        "",
-    ]
-
-    # Market snapshot
-    lines.append("<b>📈 Watchlist Snapshot</b>")
-    for d in market_data[:6]:
-        arrow = "▲" if d["change_pct"] >= 0 else "▼"
-        lines.append(
-            f"  {arrow} <code>{d['symbol']:<14}</code> "
-            f"${d['price']}  ({d['change_pct']:+.2f}%)"
-        )
-
-    lines.append("")
-
-    # Signals
-    signals = analysis.get("top_signals", [])
-    if analysis.get("skip_trading_today") or not signals:
-        lines.append("⚠️ <b>No qualifying signals today</b>")
-        if analysis.get("skip_reason"):
-            lines.append(f"Reason: {analysis['skip_reason']}")
-    else:
-        lines.append(f"<b>🎯 Signals ({len(signals)} found)</b>")
-        for s in signals:
-            direction_emoji = {"CALL": "🟢 CALL", "PUT": "🔴 PUT", "HOLD": "🟡 HOLD"}.get(
-                s.get("direction", "HOLD"), "⚪"
-            )
-            strength_bar = "█" * int(s.get("signal_strength", 0) * 5) + "░" * (5 - int(s.get("signal_strength", 0) * 5))
-            lines += [
-                "",
-                f"<b>{s.get('symbol')}</b>  {direction_emoji}",
-                f"  Strength: [{strength_bar}] {int(s.get('signal_strength',0)*100)}%",
-                f"  Action: {s.get('suggested_action','—')}",
-                f"  Strike hint: {s.get('suggested_strike_hint','ATM')}  |  DTE: ~{s.get('suggested_dte', 21)}d",
-                f"  Why: {s.get('reasoning','—')}",
-            ]
-
-    lines += [
-        "",
-        "<b>⚠️ Key Risks</b>",
-        *[f"  • {r}" for r in analysis.get("key_risks", [])[:3]],
-        "",
-        f"<b>🔄 Sector flow:</b> {analysis.get('sector_rotation','—')}",
-        f"<b>📉 Volatility:</b> {analysis.get('vix_comment','—')}",
-        "",
-        f"<i>Risk per trade: {strategy['risk_per_trade_pct']}% | Model: {GEMINI_MODEL}</i>",
-        "<i>⚠️ Not financial advice. Always do your own research.</i>",
-    ]
-
-    return "\n".join(lines)
-
-
-# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    strategy = STRATEGIES.get(STRATEGY, STRATEGIES["balanced"])
-    print(f"\n=== Market Bot — Strategy: {strategy['name']} ===")
-    print(f"    Model: {GEMINI_MODEL}")
-    print(f"    Symbols: {strategy['watchlist']}\n")
-
-    print("[1/4] Fetching market data...")
-    market_data = fetch_market_data(strategy["watchlist"])
-    print(f"      Got data for {len(market_data)} symbols")
-
-    print("[2/4] Fetching news headlines...")
-    headlines = fetch_news_headlines()
-    print(f"      Got {len(headlines)} headlines")
-
-    print("[3/4] Analysing with AI...")
-    analysis = analyse_with_ai(market_data, headlines, strategy)
-    print(f"      Mood: {analysis.get('market_mood')} | Signals: {len(analysis.get('top_signals', []))}")
-
-    print("[4/4] Sending to Telegram...")
-    message = format_message(analysis, market_data, strategy)
-    send_telegram(message)
-
+    print(f"\n=== Market Bot — RUN_TYPE={RUN_TYPE} | Strategy={_strategy()['name']} ===\n")
+    flow = FLOWS.get(RUN_TYPE)
+    if flow is None:
+        print(f"[ERROR] Unknown RUN_TYPE '{RUN_TYPE}'. Valid: {', '.join(FLOWS)}")
+        sys.exit(1)
+    flow()
     print("\n=== Done ===\n")
 
 
