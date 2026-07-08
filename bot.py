@@ -1,6 +1,6 @@
 """
 Market Intelligence Bot
-GitHub Actions + OpenRouter API + Telegram
+GitHub Actions + Gemini API + Telegram
 Supports: NSE (India) and US Markets
 """
 
@@ -13,15 +13,15 @@ import pytz
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-OPENROUTER_API_KEY = os.environ["OPENROUTER_API_KEY"]
+GEMINI_API_KEY      = os.environ["GEMINI_API_KEY"]
 TELEGRAM_BOT_TOKEN  = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID    = os.environ["TELEGRAM_CHAT_ID"]
 
 # Load active strategy from env (default: balanced)
 STRATEGY = os.environ.get("STRATEGY", "balanced")
 
-# OpenRouter model — swap anytime without changing logic
-OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemini-flash-1.5")
+# Gemini model — swap anytime without changing logic
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 # ── Strategy Configs ──────────────────────────────────────────────────────────
 
@@ -155,11 +155,11 @@ def fetch_news_headlines() -> list[str]:
     return list(set(h for h in headlines if h))[:12]
 
 
-# ── AI Analysis (OpenRouter) ──────────────────────────────────────────────────
+# ── AI Analysis (Gemini) ──────────────────────────────────────────────────────
 
 def analyse_with_ai(market_data: list[dict], headlines: list[str], strategy: dict) -> dict:
     """
-    Send market data + headlines to OpenRouter.
+    Send market data + headlines to Gemini.
     Returns structured analysis with signals.
     """
 
@@ -215,29 +215,24 @@ Only include signals where signal_strength >= {strategy['min_signal_strength']} 
 If no signals qualify, return empty top_signals array and set skip_trading_today to true.
 """
 
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/market-bot",
-        "X-Title": "Market Intelligence Bot",
-    }
-
     payload = {
-        "model": OPENROUTER_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 1500,
-        "temperature": 0.3,
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": 1500,
+        },
     }
 
     r = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers=headers,
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+        headers={"Content-Type": "application/json"},
+        params={"key": GEMINI_API_KEY},
         json=payload,
         timeout=30,
     )
     r.raise_for_status()
 
-    raw = r.json()["choices"][0]["message"]["content"].strip()
+    raw = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
 
     # Strip any accidental markdown fences
     if raw.startswith("```"):
@@ -331,7 +326,7 @@ def format_message(analysis: dict, market_data: list[dict], strategy: dict) -> s
         f"<b>🔄 Sector flow:</b> {analysis.get('sector_rotation','—')}",
         f"<b>📉 Volatility:</b> {analysis.get('vix_comment','—')}",
         "",
-        f"<i>Risk per trade: {strategy['risk_per_trade_pct']}% | Model: {OPENROUTER_MODEL}</i>",
+        f"<i>Risk per trade: {strategy['risk_per_trade_pct']}% | Model: {GEMINI_MODEL}</i>",
         "<i>⚠️ Not financial advice. Always do your own research.</i>",
     ]
 
@@ -343,7 +338,7 @@ def format_message(analysis: dict, market_data: list[dict], strategy: dict) -> s
 def main():
     strategy = STRATEGIES.get(STRATEGY, STRATEGIES["balanced"])
     print(f"\n=== Market Bot — Strategy: {strategy['name']} ===")
-    print(f"    Model: {OPENROUTER_MODEL}")
+    print(f"    Model: {GEMINI_MODEL}")
     print(f"    Symbols: {strategy['watchlist']}\n")
 
     print("[1/4] Fetching market data...")

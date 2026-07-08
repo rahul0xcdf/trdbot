@@ -26,9 +26,9 @@ on:
           - conservative
           - sentiment_first
       model:
-        description: "OpenRouter model"
+        description: "Gemini model"
         required: false
-        default: "google/gemini-flash-1.5"
+        default: "gemini-2.5-flash"
         type: string
 
 jobs:
@@ -69,7 +69,7 @@ jobs:
       # ── 5. Run the bot ────────────────────────────────────────────────────
       - name: Run Market Bot
         env:
-          OPENROUTER_API_KEY:  ${{ secrets.OPENROUTER_API_KEY }}
+          GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
           GNEWS_API_KEY:       ${{ secrets.GNEWS_API_KEY }}
@@ -81,11 +81,11 @@ jobs:
               vars.ACTIVE_STRATEGY ||
               'balanced'
             }}
-          OPENROUTER_MODEL: >-
+          GEMINI_MODEL: >-
             ${{
               github.event.inputs.model ||
-              vars.OPENROUTER_MODEL ||
-              'google/gemini-flash-1.5'
+              vars.GEMINI_MODEL ||
+              'gemini-2.5-flash'
             }}
         run: python bot.py
 
