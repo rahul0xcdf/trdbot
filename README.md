@@ -1,18 +1,19 @@
 # 📊 Market Intelligence Bot
 
-Telegram bot that runs on **GitHub Actions** (free), uses **OpenRouter** for AI analysis, and sends daily market insights + options signals.
+Telegram bot that runs on **GitHub Actions** (free), uses the **Gemini API** for AI analysis, and sends Indian intraday market digests + options signals. Also answers **slash commands** live during market hours.
 
 ---
 
 ## Architecture
 
 ```
-GitHub Actions (cron)
-    → bot.py
-        → yfinance      (price data)
-        → GNews API     (headlines)
-        → OpenRouter    (AI analysis — Gemini / Claude / GPT-4)
-        → Telegram Bot  (sends digest to your phone)
+GitHub Actions (cron, 8 slots/day)          GitHub Actions (listener, market hours)
+    → bot.py  RUN_TYPE=<slot>                   → bot.py  RUN_TYPE=listen
+        → NSE scraper   (OI, PCR, VIX, FII/DII)     → long-polls Telegram getUpdates
+        → yfinance      (price data)                → answers /price /oi /vix /analyze …
+        → RSS + GNews   (headlines)
+        → Gemini API    (AI analysis)
+        → Telegram Bot  (pushes digest to your phone)
 ```
 
 ---
@@ -27,11 +28,10 @@ GitHub Actions (cron)
 4. Get your **Chat ID**: visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates`  
    after sending a message to the bot — look for `"chat":{"id":XXXXXXX}`
 
-### Step 2 — Get your OpenRouter API key
+### Step 2 — Get your Gemini API key
 
-1. Sign up at [openrouter.ai](https://openrouter.ai)
-2. Go to **Keys** → create a new key
-3. Add credits (Gemini Flash is ~$0.00015/1K tokens — nearly free)
+1. Go to [Google AI Studio](https://aistudio.google.com/apikey)
+2. Create an API key (Gemini Flash has a generous free tier)
 
 ### Step 3 — Fork this repo on GitHub
 
@@ -49,7 +49,7 @@ Go to your repo → **Settings → Secrets and variables → Actions → New rep
 
 | Secret Name | Value |
 |---|---|
-| `OPENROUTER_API_KEY` | Your OpenRouter key |
+| `GEMINI_API_KEY` | Your Gemini API key |
 | `TELEGRAM_BOT_TOKEN` | Your bot token from BotFather |
 | `TELEGRAM_CHAT_ID` | Your chat ID (number) |
 | `GNEWS_API_KEY` | *(optional)* from gnews.io |
@@ -60,22 +60,52 @@ Go to **Settings → Secrets and variables → Actions → Variables tab**
 
 | Variable | Default | Options |
 |---|---|---|
-| `ACTIVE_STRATEGY` | `balanced` | `balanced`, `momentum`, `conservative`, `sentiment_first` |
-| `OPENROUTER_MODEL` | `google/gemini-flash-1.5` | Any OpenRouter model string |
+| `ACTIVE_STRATEGY` | `adaptive` | `adaptive`, `nifty_intraday`, `balanced`, `momentum`, `conservative`, `sentiment_first` |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Any Gemini model id |
 
 ---
 
 ## Schedule
 
-The bot runs **3 times per trading day** (Mon–Fri):
+Push digests run **8 times per trading day** (Mon–Fri, IST):
 
-| Time (IST) | Time (UTC) | Run type |
-|---|---|---|
-| 8:30 AM | 3:00 AM | Pre-market India digest |
-| 7:00 PM | 1:30 PM | Pre-market US digest |
-| 6:00 PM | 12:30 PM | End-of-day summary |
+| Time (IST) | Run type |
+|---|---|
+| 8:15 AM | `premarket` — gap, VIX, PCR/max pain, stocks to watch |
+| 9:30 AM | `opening` — short, actionable open read |
+| 11:00 AM | `midmorning` — trend check + OI |
+| 12:30 PM | `european_open` — trend check + OI |
+| 1:30 PM | `london_us` — trend check + OI |
+| 2:45 PM | `exit_reminder` — square-off nudge |
+| 4:00 PM | `eod` — FII/DII + OI setup for tomorrow |
+| every 30 min | `vix_check` — silent unless VIX > 18 or moves > 10% |
 
-To change schedule, edit `.github/workflows/market-bot.yml` → `cron` lines.
+The **command listener** runs in two windows (9:00 AM–12:15 PM, 12:15 PM–3:30 PM IST) via `.github/workflows/telegram-listener.yml`.
+
+To change schedules, edit the `cron` lines in the workflow files. Note GitHub cron can fire a few minutes late.
+
+---
+
+## Telegram Slash Commands
+
+While a listener window is up, the bot answers these in your chat (they also
+appear in Telegram's `/` autocomplete menu):
+
+| Command | What it does |
+|---|---|
+| `/price RELIANCE` | Quote + momentum, volume spike, VWAP (also `/price NIFTY`) |
+| `/oi` or `/oi RELIANCE` | Option-chain summary — PCR, max pain, top OI strikes |
+| `/vix` | India VIX + what it means for option premiums |
+| `/fii` | Latest FII/DII net flows |
+| `/news` | Top Indian market headlines (last 12h) |
+| `/analyze` | Full AI analysis on demand (~1–2 min) |
+| `/strategy` | Currently active strategy params (live, regime-resolved) |
+| `/stats` | Signal win-rate stats from the local DB |
+| `/help`, `/ping` | Command list / liveness check |
+
+Only your `TELEGRAM_CHAT_ID` is answered — messages from anyone else are ignored.
+Commands sent while no listener is running are answered at the start of the next
+window (if less than an hour old) or dropped.
 
 ---
 
@@ -93,10 +123,19 @@ Actions tab → Market Intelligence Bot → Run workflow → pick strategy
 
 | Strategy | Risk/trade | Best for |
 |---|---|---|
+| `adaptive` *(default)* | 0.75–1.5% (regime-based) | Auto-tunes thresholds & size from live VIX / PCR / gap |
+| `nifty_intraday` | 1.5% | Fixed weekly-options intraday config |
 | `balanced` | 2% | Most traders, equal signal weight |
 | `momentum` | 3% | Strong trend environments |
 | `conservative` | 1% | Low volatility, high conviction only |
 | `sentiment_first` | 2.5% | News/tweet-driven moves |
+
+**How `adaptive` works:** before each run it reads the live regime and derives
+the strategy instead of using fixed numbers — VIX ≥ 20 raises the signal bar to
+0.80 and cuts risk to 0.75% (prefer spreads); VIX < 15 relaxes to 0.65 / 1.5%;
+a PCR at an extreme (≥ 1.3 or ≤ 0.7) adds +0.05 to the required strength; a
+big opening gap adds a gap-trap warning. The regime summary is injected into
+the AI prompt, so the analysis itself reasons with it.
 
 ---
 
@@ -117,17 +156,14 @@ python backtest.py --strategy momentum --days 60
 
 ---
 
-## Recommended OpenRouter Models
+## Gemini Models
 
 | Model | Speed | Cost | Best for |
 |---|---|---|---|
-| `google/gemini-flash-1.5` | Fast | ~Free | Daily use (default) |
-| `google/gemini-pro-1.5` | Medium | Low | Better reasoning |
-| `anthropic/claude-3-haiku` | Fast | Low | Concise signals |
-| `anthropic/claude-sonnet-4-6` | Slower | Medium | Deep analysis |
-| `openai/gpt-4o-mini` | Fast | Low | Alternative |
+| `gemini-2.5-flash` | Fast | ~Free | Daily use (default) |
+| `gemini-2.5-pro` | Slower | Low | Deeper reasoning |
 
-Change model any time via the `OPENROUTER_MODEL` variable — no code changes needed.
+Change model any time via the `GEMINI_MODEL` variable — no code changes needed.
 
 ---
 
