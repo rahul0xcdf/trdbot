@@ -1,26 +1,41 @@
 name: Market Intelligence Bot
 
 on:
-  # ── Scheduled runs (all times in UTC) ──────────────────────────────────────
+  # ── Scheduled runs (all cron in UTC; comments show IST) — Mon–Fri ──────────
   schedule:
-    # Pre-market India — 8:30 AM IST = 3:00 AM UTC  (Mon–Fri)
-    - cron: "0 3 * * 1-5"
+    - cron: "45 2 * * 1-5"      # 8:15 AM IST  → premarket
+    - cron: "0 4 * * 1-5"       # 9:30 AM IST  → opening
+    - cron: "30 5 * * 1-5"      # 11:00 AM IST → midmorning
+    - cron: "0 7 * * 1-5"       # 12:30 PM IST → european_open
+    - cron: "0 8 * * 1-5"       # 1:30 PM IST  → london_us
+    - cron: "15 9 * * 1-5"      # 2:45 PM IST  → exit_reminder
+    - cron: "30 10 * * 1-5"     # 4:00 PM IST  → eod
+    - cron: "*/30 4-10 * * 1-5" # every 30 min market hours → vix_check
 
-    # Pre-market US — 8:30 AM EST = 1:30 PM UTC  (Mon–Fri)
-    - cron: "30 13 * * 1-5"
-
-    # End-of-day digest — 6:00 PM IST = 12:30 PM UTC  (Mon–Fri)
-    - cron: "30 12 * * 1-5"
-
-  # ── Manual trigger from GitHub UI (for testing) ────────────────────────────
+  # ── Manual trigger (for testing any flow on demand) ────────────────────────
   workflow_dispatch:
     inputs:
+      run_type:
+        description: "Which flow to run"
+        required: false
+        default: "premarket"
+        type: choice
+        options:
+          - premarket
+          - opening
+          - midmorning
+          - european_open
+          - london_us
+          - exit_reminder
+          - eod
+          - vix_check
       strategy:
         description: "Strategy to use"
         required: false
-        default: "balanced"
+        default: "nifty_intraday"
         type: choice
         options:
+          - nifty_intraday
           - balanced
           - momentum
           - conservative
@@ -37,36 +52,40 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      # ── 1. Checkout repo ──────────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v5
 
-      # ── 2. Python setup ───────────────────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: "pip"
 
-      # ── 3. Install dependencies ───────────────────────────────────────────
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # ── 4. Determine which scheduled run this is ──────────────────────────
-      #    Sets RUN_TYPE env var used in bot.py for message headers
-      - name: Set run context
+      # ── Map the firing cron → RUN_TYPE (or use the manual input) ───────────
+      #    github.event.schedule holds the exact cron string that fired.
+      - name: Resolve RUN_TYPE
         run: |
-          HOUR=$(date -u +%H)
-          MIN=$(date -u +%M)
-          if [ "$HOUR" = "03" ]; then
-            echo "RUN_TYPE=premarket_india" >> $GITHUB_ENV
-          elif [ "$HOUR" = "13" ]; then
-            echo "RUN_TYPE=premarket_us" >> $GITHUB_ENV
+          if [ -n "${{ github.event.inputs.run_type }}" ]; then
+            RUN_TYPE="${{ github.event.inputs.run_type }}"
           else
-            echo "RUN_TYPE=eod_digest" >> $GITHUB_ENV
+            case "${{ github.event.schedule }}" in
+              "45 2 * * 1-5")      RUN_TYPE=premarket ;;
+              "0 4 * * 1-5")       RUN_TYPE=opening ;;
+              "30 5 * * 1-5")      RUN_TYPE=midmorning ;;
+              "0 7 * * 1-5")       RUN_TYPE=european_open ;;
+              "0 8 * * 1-5")       RUN_TYPE=london_us ;;
+              "15 9 * * 1-5")      RUN_TYPE=exit_reminder ;;
+              "30 10 * * 1-5")     RUN_TYPE=eod ;;
+              "*/30 4-10 * * 1-5") RUN_TYPE=vix_check ;;
+              *)                   RUN_TYPE=premarket ;;
+            esac
           fi
+          echo "RUN_TYPE=$RUN_TYPE" >> "$GITHUB_ENV"
+          echo "Resolved RUN_TYPE=$RUN_TYPE"
 
-      # ── 5. Run the bot ────────────────────────────────────────────────────
       - name: Run Market Bot
         env:
           GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
@@ -74,12 +93,11 @@ jobs:
           TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
           GNEWS_API_KEY:       ${{ secrets.GNEWS_API_KEY }}
           RUN_TYPE:            ${{ env.RUN_TYPE }}
-          # Strategy: manual input overrides repo variable, which overrides default
           STRATEGY: >-
             ${{
               github.event.inputs.strategy ||
               vars.ACTIVE_STRATEGY ||
-              'balanced'
+              'nifty_intraday'
             }}
           GEMINI_MODEL: >-
             ${{
@@ -89,11 +107,11 @@ jobs:
             }}
         run: python bot.py
 
-      # ── 6. On failure — notify Telegram ───────────────────────────────────
+      # ── On failure — notify Telegram (skip for silent vix_check noise) ─────
       - name: Notify on failure
-        if: failure()
+        if: failure() && env.RUN_TYPE != 'vix_check'
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="⚠️ Market Bot failed on GitHub Actions. Check: ${{ github.server_url }}/${{ github.repository }}/actions" \
+            -d text="⚠️ Market Bot failed (RUN_TYPE=${{ env.RUN_TYPE }}). Check: ${{ github.server_url }}/${{ github.repository }}/actions" \
             -d parse_mode="HTML"
