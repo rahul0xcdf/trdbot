@@ -180,6 +180,7 @@ def analyse_with_ai(market_data: list[dict], headlines: list[str], strategy: dic
 - Risk per trade: {strategy['risk_per_trade_pct']}%
 
 ## Today's Market Data
+
 {market_summary}
 
 ## Recent Headlines
@@ -219,7 +220,15 @@ If no signals qualify, return empty top_signals array and set skip_trading_today
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.3,
-            "maxOutputTokens": 1500,
+            # Budget must cover the whole JSON. Gemini 2.5 is a thinking model,
+            # so give headroom and disable thinking (below) to avoid truncation.
+            "maxOutputTokens": 4096,
+            # Ask for native JSON — no markdown fences to strip, no truncation
+            # from stray prose.
+            "responseMimeType": "application/json",
+            # Thinking tokens draw from maxOutputTokens; disable so the full
+            # budget goes to the actual answer.
+            "thinkingConfig": {"thinkingBudget": 0},
         },
     }
 
@@ -232,9 +241,16 @@ If no signals qualify, return empty top_signals array and set skip_trading_today
     )
     r.raise_for_status()
 
-    raw = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    candidate = r.json()["candidates"][0]
 
-    # Strip any accidental markdown fences
+    # Guard against truncation / safety blocks so the failure is legible.
+    finish = candidate.get("finishReason")
+    if finish not in (None, "STOP"):
+        raise RuntimeError(f"Gemini did not finish cleanly (finishReason={finish})")
+
+    raw = candidate["content"]["parts"][0]["text"].strip()
+
+    # Strip any accidental markdown fences (harmless with responseMimeType set)
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
