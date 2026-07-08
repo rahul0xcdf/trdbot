@@ -32,9 +32,10 @@ on:
       strategy:
         description: "Strategy to use"
         required: false
-        default: "nifty_intraday"
+        default: "adaptive"
         type: choice
         options:
+          - adaptive
           - nifty_intraday
           - balanced
           - momentum
@@ -97,7 +98,7 @@ jobs:
             ${{
               github.event.inputs.strategy ||
               vars.ACTIVE_STRATEGY ||
-              'nifty_intraday'
+              'adaptive'
             }}
           GEMINI_MODEL: >-
             ${{

@@ -1,0 +1,53 @@
+name: Telegram Command Listener
+
+# Long-polls Telegram getUpdates so slash commands get answered live.
+# Two back-to-back windows cover market hours (crons are UTC; comments IST).
+# NOTE: GitHub cron can fire several minutes late — coverage starts then.
+on:
+  schedule:
+    - cron: "30 3 * * 1-5"   # 9:00 AM IST  → listens until ~12:15 PM
+    - cron: "45 6 * * 1-5"   # 12:15 PM IST → listens until ~3:30 PM
+
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "How long to listen (minutes)"
+        required: false
+        default: "15"
+
+# If a delayed window is still running when the next starts, cancel the old
+# one — exactly one listener polls at a time (two would steal each other's
+# updates).
+concurrency:
+  group: telegram-listener
+  cancel-in-progress: true
+
+jobs:
+  listen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 210
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Listen for commands
+        env:
+          GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          GNEWS_API_KEY:      ${{ secrets.GNEWS_API_KEY }}
+          RUN_TYPE: listen
+          LISTEN_MINUTES: ${{ github.event.inputs.minutes || '195' }}
+          STRATEGY: ${{ vars.ACTIVE_STRATEGY || 'adaptive' }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+        run: python bot.py
