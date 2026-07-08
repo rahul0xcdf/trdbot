@@ -16,7 +16,7 @@ import time
 
 import requests
 
-from modules import nse_data, market_data, news, ai_engine
+from modules import nse_data, market_data, news, ai_engine, premarket, screener
 from modules import telegram as tg
 
 POLL_TIMEOUT = 50  # Telegram long-poll seconds per getUpdates call
@@ -25,6 +25,12 @@ STALE_AFTER = 3600  # ignore commands older than this (listener was down)
 # Shown in Telegram's "/" autocomplete menu (registered via setMyCommands).
 COMMANDS = [
     ("help", "List all commands"),
+    ("premarket", "Full AI pre-market report (cached or fresh)"),
+    ("watchlist", "Top call & put opportunities (≥85/100 only)"),
+    ("market", "Overall market bias + confidence + plan"),
+    ("sectors", "Sector strength rankings (live)"),
+    ("alerts", "Today's events, risks and warnings"),
+    ("stock", "Deep AI analysis: /stock RELIANCE (~1 min)"),
     ("price", "Quote + technicals: /price RELIANCE or /price NIFTY"),
     ("oi", "Option chain OI summary: /oi or /oi RELIANCE"),
     ("vix", "India VIX + what it means for premiums"),
@@ -207,10 +213,71 @@ def _cmd_stats(args, ctx) -> str:
     return "\n".join(lines)
 
 
+# ── AI report handlers ────────────────────────────────────────────────────────
+
+_NO_REPORT = ("No pre-market report cached for today yet. "
+              "Run /premarket to generate one (takes 2–4 min).")
+
+
+def _cmd_premarket(args, ctx) -> str:
+    report = premarket.load_cached()
+    if not report:
+        _reply(ctx, "⏳ No report cached for today — running the full pipeline "
+                    "(screener + options + AI). This takes 2–4 minutes…")
+        report, _ = premarket.generate(ctx["strategy_resolver"])
+    return tg.format_ai_premarket(report)
+
+
+def _cmd_watchlist(args, ctx) -> str:
+    report = premarket.load_cached()
+    return tg.format_watchlist(report) if report else _NO_REPORT
+
+
+def _cmd_market(args, ctx) -> str:
+    report = premarket.load_cached()
+    return tg.format_market_outlook(report) if report else _NO_REPORT
+
+
+def _cmd_alerts(args, ctx) -> str:
+    report = premarket.load_cached()
+    return tg.format_alerts(report) if report else _NO_REPORT
+
+
+def _cmd_sectors(args, ctx) -> str:
+    live = nse_data.get_sector_indices()
+    report = premarket.load_cached()
+    if not live and not report:
+        return "Couldn't fetch sector data right now."
+    return tg.format_sectors(report, live=live)
+
+
+def _cmd_stock(args, ctx) -> str:
+    if not args:
+        return "Usage: <code>/stock RELIANCE</code>"
+    raw = args[0].strip().upper().removesuffix(".NS")
+    if raw in ("NIFTY", "BANKNIFTY"):
+        return ("For indices use /oi (chain + levels) and /market (bias) — "
+                "/stock is for F&O stocks.")
+    _reply(ctx, f"⏳ Analysing {html.escape(raw)} — technicals, option chain, "
+                "fundamentals, AI. Takes about a minute…")
+    snap = screener.single_stock(f"{raw}.NS")
+    if snap is None:
+        return f"Couldn't fetch data for <b>{html.escape(raw)}</b> — check the symbol."
+    headlines = [h["title"] for h in news.fetch_indian_news()][:10]
+    analysis = ai_engine.analyse_stock(snap, headlines)
+    return tg.format_stock_analysis(analysis, snap)
+
+
 _HANDLERS = {
     "start": _cmd_help,
     "help": _cmd_help,
     "ping": _cmd_ping,
+    "premarket": _cmd_premarket,
+    "watchlist": _cmd_watchlist,
+    "market": _cmd_market,
+    "sectors": _cmd_sectors,
+    "alerts": _cmd_alerts,
+    "stock": _cmd_stock,
     "price": _cmd_price,
     "oi": _cmd_oi,
     "vix": _cmd_vix,

@@ -200,22 +200,189 @@ def format_vix_alert(vix_value, vix_change, context: str = "") -> str:
     ]).strip()
 
 
-# ── Sender (unchanged) ────────────────────────────────────────────────────────
+# ── AI pre-market report formatters ───────────────────────────────────────────
+
+_RECO_EMOJI = {"GO": "🟢 GO", "CAUTION": "🟡 CAUTION",
+               "WARNING": "🟠 WARNING", "STAY_OUT": "🔴 STAY OUT"}
+
+
+def _opportunity_block(o: dict) -> list[str]:
+    icon = "🟢" if o.get("bias") == "bullish" else "🔴"
+    return [
+        "",
+        f"{icon} <b>{o.get('symbol')}</b> — <b>{o.get('confidence_score')}/100</b> "
+        f"@ {o.get('current_price')}",
+        f"  Entry: {o.get('entry_zone')}  |  SL: {o.get('stop_loss')}",
+        f"  T1: {o.get('target_1')}  |  T2: {o.get('target_2')}  |  RR {o.get('risk_reward')}",
+        f"  ⚡ {o.get('suggested_strike')} ({o.get('suggested_expiry')})",
+        f"  Scalp: {o.get('scalping_suitability')}  |  Hold: {o.get('expected_holding_time')}",
+        f"  Why: {o.get('why_selected')}",
+        f"  ⚠️ {'; '.join(o.get('key_risks', [])[:2])}",
+    ]
+
+
+def format_watchlist(report: dict) -> str:
+    calls = report.get("call_opportunities") or []
+    puts = report.get("put_opportunities") or []
+    if report.get("no_trade") or (not calls and not puts):
+        return ("🛑 <b>No high-probability opportunities found today.</b>\n"
+                f"{report.get('no_trade_reason', 'Capital preservation is recommended.')}")
+    lines = [f"<b>🎯 AI Watchlist — {report.get('generated_at', _now())}</b>"]
+    if calls:
+        lines += ["", f"<b>📈 Call opportunities ({len(calls)})</b>"]
+        for o in calls[:5]:
+            lines += _opportunity_block(o)
+    if puts:
+        lines += ["", f"<b>📉 Put opportunities ({len(puts)})</b>"]
+        for o in puts[:5]:
+            lines += _opportunity_block(o)
+    lines += ["", "<i>Only setups scoring ≥85/100 are listed.</i>", *_footer()]
+    return "\n".join(lines)
+
+
+def format_market_outlook(report: dict) -> str:
+    mo = report.get("market_outlook") or {}
+    return "\n".join([
+        f"<b>🧭 Market Outlook — {report.get('generated_at', _now())}</b>",
+        "",
+        f"<b>{_RECO_EMOJI.get(mo.get('recommendation'), '⚪ —')}</b>  "
+        f"(confidence {mo.get('confidence', '—')}%)",
+        f"Bull {mo.get('bullish_prob', '—')}%  ·  Bear {mo.get('bearish_prob', '—')}%  "
+        f"·  Range {mo.get('rangebound_prob', '—')}%",
+        "",
+        mo.get("why", "—"),
+        "",
+        f"<b>Plan:</b> {(report.get('trading_plan') or {}).get('style', '—')} — "
+        f"{(report.get('trading_plan') or {}).get('why', '')}",
+    ])
+
+
+def format_sectors(report: dict | None, live: list | None = None) -> str:
+    lines = [f"<b>🏭 Sector Rotation — {_now()}</b>", ""]
+    sectors = live or (report or {}).get("sectors_raw") or []
+    if sectors:
+        for s in sectors:
+            arrow = "▲" if s["change_pct"] >= 0 else "▼"
+            lines.append(f"  {arrow} {s['sector']:<20} {s['change_pct']:+.2f}%")
+    so = (report or {}).get("sector_outlook") or {}
+    if so:
+        lines += [
+            "",
+            f"<b>Strong:</b> {', '.join(so.get('bullish_sectors', []) or ['—'])}",
+            f"<b>Weak:</b> {', '.join(so.get('bearish_sectors', []) or ['—'])}",
+            f"<i>{so.get('comment', '')}</i>",
+        ]
+    return "\n".join(lines)
+
+
+def format_alerts(report: dict) -> str:
+    lines = [f"<b>🚨 Today's Alerts — {report.get('generated_at', _now())}</b>", ""]
+    alerts = report.get("alerts") or []
+    risks = report.get("risk_assessment") or []
+    if not alerts and not risks:
+        return lines[0] + "\n\nNo notable events flagged for today."
+    lines += [f"  • {a}" for a in alerts]
+    if risks:
+        lines += ["", "<b>⚠️ Risk assessment</b>", *[f"  • {r}" for r in risks]]
+    return "\n".join(lines)
+
+
+def format_ai_premarket(report: dict) -> str:
+    """The full 8:15 AM report (auto-chunked by send_telegram if long)."""
+    mo = report.get("market_outlook") or {}
+    nl = report.get("nifty_levels") or {}
+    bl = report.get("banknifty_levels") or {}
+    lines = [
+        f"<b>🧠 AI Pre-Market Report — {report.get('generated_at', _now())}</b>",
+        "",
+        f"<b>{_RECO_EMOJI.get(mo.get('recommendation'), '⚪ —')}</b>  "
+        f"(confidence {mo.get('confidence', '—')}%)",
+        f"Bull {mo.get('bullish_prob', '—')}%  ·  Bear {mo.get('bearish_prob', '—')}%  "
+        f"·  Range {mo.get('rangebound_prob', '—')}%",
+        mo.get("why", ""),
+        "",
+        f"<b>🌍 Overnight:</b> {report.get('overnight_summary', '—')}",
+        "",
+        f"<b>🇮🇳 Domestic:</b> {report.get('domestic_summary', '—')}",
+        "",
+        "<b>📏 Key levels</b>",
+        f"  NIFTY  S: {nl.get('supports', '—')}  R: {nl.get('resistances', '—')}",
+        f"  BANKNIFTY  S: {bl.get('supports', '—')}  R: {bl.get('resistances', '—')}",
+        "",
+        format_sectors(report).split("\n", 2)[-1],  # sector body without its header
+        "",
+        f"<b>🧭 Trading plan:</b> {(report.get('trading_plan') or {}).get('style', '—')} — "
+        f"{(report.get('trading_plan') or {}).get('why', '')}",
+        "",
+        format_watchlist(report),
+    ]
+    alerts = report.get("alerts") or []
+    if alerts:
+        lines += ["", "<b>🚨 Alerts</b>", *[f"  • {a}" for a in alerts[:6]]]
+    return "\n".join(lines)
+
+
+def format_stock_analysis(a: dict, snapshot: dict | None = None) -> str:
+    bias = (a.get("bias") or "neutral").lower()
+    icon = {"bullish": "🟢", "bearish": "🔴"}.get(bias, "🟡")
+    lines = [
+        f"{icon} <b>{a.get('symbol')} — {bias.upper()}</b>  "
+        f"({a.get('confidence_score', '—')}/100)",
+        "",
+        f"<b>Technicals:</b> {a.get('technical_summary', '—')}",
+        f"<b>Options:</b> {a.get('options_summary', '—')}",
+        f"<b>Fundamentals:</b> {a.get('fundamental_summary', '—')}",
+        f"<b>Sentiment:</b> {a.get('sentiment_summary', '—')}",
+        "",
+        f"<b>Entry:</b> {a.get('entry_zone', '—')}  |  <b>SL:</b> {a.get('stop_loss', '—')}",
+        f"<b>T1:</b> {a.get('target_1', '—')}  |  <b>T2:</b> {a.get('target_2', '—')}  "
+        f"|  RR {a.get('risk_reward', '—')}",
+        f"<b>⚡ Option:</b> {a.get('option_suggestion', '—')}",
+        f"<b>Scalp:</b> {a.get('scalping_suitability', '—')}  |  "
+        f"<b>Hold:</b> {a.get('expected_holding_time', '—')}",
+    ]
+    risks = a.get("key_risks") or []
+    if risks:
+        lines += ["", "<b>⚠️ Risks:</b> " + "; ".join(risks[:3])]
+    lines += ["", f"<i>{a.get('verdict', '')}</i>", *_footer()]
+    return "\n".join(lines)
+
+
+# ── Sender ────────────────────────────────────────────────────────────────────
+
+_TELEGRAM_MAX = 4000  # actual limit 4096; margin for safety
+
+
+def _chunks(message: str) -> list[str]:
+    """Split long messages on line boundaries (tags are per-line, so safe)."""
+    if len(message) <= _TELEGRAM_MAX:
+        return [message]
+    chunks, current = [], ""
+    for line in message.split("\n"):
+        if len(current) + len(line) + 1 > _TELEGRAM_MAX:
+            chunks.append(current.rstrip("\n"))
+            current = ""
+        current += line + "\n"
+    if current.strip():
+        chunks.append(current.rstrip("\n"))
+    return chunks
+
 
 def send_telegram(message: str, token: str, chat_id: str):
-    """Send a message to Telegram."""
+    """Send a message to Telegram, auto-splitting past the 4096-char limit."""
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": True,
-    }
-    try:
-        r = requests.post(url, json=payload, timeout=TIMEOUT)
-        if r.status_code != 200:
-            print(f"[ERROR] send_telegram: {r.text}")
-        else:
-            print("[OK] send_telegram: message sent")
-    except Exception as e:
-        print(f"[ERROR] send_telegram: {e}")
+    for chunk in _chunks(message):
+        payload = {
+            "chat_id": chat_id,
+            "text": chunk,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }
+        try:
+            r = requests.post(url, json=payload, timeout=TIMEOUT)
+            if r.status_code != 200:
+                print(f"[ERROR] send_telegram: {r.text}")
+            else:
+                print("[OK] send_telegram: message sent")
+        except Exception as e:
+            print(f"[ERROR] send_telegram: {e}")

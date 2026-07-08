@@ -81,12 +81,13 @@ def _fetch_chain_v3(kind: str, symbol: str) -> tuple[dict, dict] | None:
     expiry list from /api/option-chain-contract-info and use the nearest one
     (ideal for the 0-7 DTE weekly intraday strategy).
 
-    kind: "Indices" or "Equities". Returns (records, filtered) or None.
+    kind: "Indices" or "Equities". Returns (records, filtered, expiry) or None.
     """
     import urllib.parse
 
+    sym = urllib.parse.quote(symbol)  # handles M&M, BAJAJ-AUTO, etc.
     ci = _fetch_json(
-        f"/api/option-chain-contract-info?symbol={symbol}",
+        f"/api/option-chain-contract-info?symbol={sym}",
         referer="https://www.nseindia.com/option-chain",
     )
     if not ci:
@@ -95,15 +96,16 @@ def _fetch_chain_v3(kind: str, symbol: str) -> tuple[dict, dict] | None:
     if not expiries:
         print(f"[ERROR] _fetch_chain_v3({symbol}): no expiry dates")
         return None
-    expiry = urllib.parse.quote(expiries[0])  # nearest expiry
+    expiry = expiries[0]  # nearest expiry
 
     data = _fetch_json(
-        f"/api/option-chain-v3?type={kind}&symbol={symbol}&expiry={expiry}",
+        f"/api/option-chain-v3?type={kind}&symbol={sym}"
+        f"&expiry={urllib.parse.quote(expiry)}",
         referer="https://www.nseindia.com/option-chain",
     )
     if not data:
         return None
-    return data.get("records", {}), data.get("filtered", {})
+    return data.get("records", {}), data.get("filtered", {}), expiry
 
 
 def _summarise_chain(records: dict, filtered: dict) -> dict | None:
@@ -118,8 +120,11 @@ def _summarise_chain(records: dict, filtered: dict) -> dict | None:
 
         total_call_oi = 0
         total_put_oi = 0
+        chg_call_oi = 0
+        chg_put_oi = 0
         call_oi_by_strike: dict[float, int] = {}
         put_oi_by_strike: dict[float, int] = {}
+        iv_by_strike: dict[float, tuple] = {}
 
         for row in rows:
             strike = row.get("strikePrice")
@@ -129,9 +134,14 @@ def _summarise_chain(records: dict, filtered: dict) -> dict | None:
             pe_oi = pe.get("openInterest", 0) or 0
             total_call_oi += ce_oi
             total_put_oi += pe_oi
+            chg_call_oi += ce.get("changeinOpenInterest", 0) or 0
+            chg_put_oi += pe.get("changeinOpenInterest", 0) or 0
             if strike is not None:
                 call_oi_by_strike[strike] = ce_oi
                 put_oi_by_strike[strike] = pe_oi
+                iv_by_strike[strike] = (
+                    ce.get("impliedVolatility"), pe.get("impliedVolatility"),
+                )
 
         if not call_oi_by_strike:
             return None
@@ -140,6 +150,10 @@ def _summarise_chain(records: dict, filtered: dict) -> dict | None:
 
         # ATM = listed strike nearest to spot.
         atm_strike = min(call_oi_by_strike, key=lambda k: abs(k - spot))
+
+        # ATM IV = mean of the ATM CE/PE implied vols (whichever are present).
+        atm_ivs = [v for v in (iv_by_strike.get(atm_strike) or ()) if v]
+        atm_iv = round(sum(atm_ivs) / len(atm_ivs), 2) if atm_ivs else None
 
         # Max pain = strike that minimises total intrinsic payout to option
         # holders (i.e. the pain inflicted on writers is minimised there).
@@ -158,13 +172,30 @@ def _summarise_chain(records: dict, filtered: dict) -> dict | None:
         top_call = sorted(call_oi_by_strike.items(), key=lambda x: x[1], reverse=True)[:5]
         top_put = sorted(put_oi_by_strike.items(), key=lambda x: x[1], reverse=True)[:5]
 
+        # ΔOI skew reads positioning: heavy fresh PE writing = bullish support,
+        # heavy fresh CE writing = bearish cap.
+        if chg_put_oi > chg_call_oi * 1.5 and chg_put_oi > 0:
+            oi_signal = "put writing dominant (bullish support)"
+        elif chg_call_oi > chg_put_oi * 1.5 and chg_call_oi > 0:
+            oi_signal = "call writing dominant (bearish cap)"
+        elif chg_call_oi < 0 and chg_put_oi > 0:
+            oi_signal = "call unwinding + put writing (bullish)"
+        elif chg_put_oi < 0 and chg_call_oi > 0:
+            oi_signal = "put unwinding + call writing (bearish)"
+        else:
+            oi_signal = "balanced"
+
         return {
             "spot": round(spot, 2),
             "pcr": pcr,
             "max_pain": best_strike,
             "atm_strike": atm_strike,
+            "atm_iv": atm_iv,
             "total_call_oi": total_call_oi,
             "total_put_oi": total_put_oi,
+            "change_call_oi": chg_call_oi,
+            "change_put_oi": chg_put_oi,
+            "oi_signal": oi_signal,
             "top_call_oi_strikes": [s for s, _ in top_call],
             "top_put_oi_strikes": [s for s, _ in top_put],
         }
@@ -173,23 +204,33 @@ def _summarise_chain(records: dict, filtered: dict) -> dict | None:
         return None
 
 
-def get_nifty_options_chain() -> dict | None:
-    """Live NIFTY index option chain summary (PCR, max pain, top OI strikes)."""
-    chain = _fetch_chain_v3("Indices", "NIFTY")
+def _index_chain(symbol: str) -> dict | None:
+    chain = _fetch_chain_v3("Indices", symbol)
     if not chain:
-        print("[ERROR] get_nifty_options_chain: no data")
+        print(f"[ERROR] {symbol} chain: no data")
         return None
-    records, filtered = chain
+    records, filtered, expiry = chain
     summary = _summarise_chain(records, filtered)
     if summary is None:
-        print("[ERROR] get_nifty_options_chain: could not summarise chain")
+        print(f"[ERROR] {symbol} chain: could not summarise")
         return None
-    summary["symbol"] = "NIFTY"
+    summary["symbol"] = symbol
+    summary["expiry"] = expiry
     print(
-        f"[OK] get_nifty_options_chain: PCR={summary['pcr']} "
+        f"[OK] {symbol} chain: PCR={summary['pcr']} "
         f"max_pain={summary['max_pain']} ATM={summary['atm_strike']}"
     )
     return summary
+
+
+def get_nifty_options_chain() -> dict | None:
+    """Live NIFTY index option chain summary (PCR, max pain, top OI strikes)."""
+    return _index_chain("NIFTY")
+
+
+def get_banknifty_options_chain() -> dict | None:
+    """Live BANKNIFTY index option chain summary."""
+    return _index_chain("BANKNIFTY")
 
 
 def get_stock_options_oi(symbol: str) -> dict | None:
@@ -198,14 +239,69 @@ def get_stock_options_oi(symbol: str) -> dict | None:
     if not chain:
         print(f"[ERROR] get_stock_options_oi({symbol}): no data")
         return None
-    records, filtered = chain
+    records, filtered, expiry = chain
     summary = _summarise_chain(records, filtered)
     if summary is None:
         print(f"[ERROR] get_stock_options_oi({symbol}): could not summarise chain")
         return None
     summary["symbol"] = symbol
+    summary["expiry"] = expiry
     print(f"[OK] get_stock_options_oi({symbol}): PCR={summary['pcr']} max_pain={summary['max_pain']}")
     return summary
+
+
+def get_sector_indices() -> list[dict] | None:
+    """
+    Sectoral index performance from NSE allIndices — the raw material for
+    sector-rotation analysis. Returns [{sector, last, change_pct}], sorted
+    strongest first.
+    """
+    data = _fetch_json("/api/allIndices")
+    if not data:
+        print("[ERROR] get_sector_indices: no data")
+        return None
+    wanted = {
+        "NIFTY BANK", "NIFTY IT", "NIFTY AUTO", "NIFTY PHARMA", "NIFTY FMCG",
+        "NIFTY METAL", "NIFTY REALTY", "NIFTY ENERGY", "NIFTY FINANCIAL SERVICES",
+        "NIFTY MEDIA", "NIFTY PSU BANK", "NIFTY PRIVATE BANK", "NIFTY INFRASTRUCTURE",
+        "NIFTY HEALTHCARE INDEX", "NIFTY CONSUMER DURABLES", "NIFTY OIL & GAS",
+    }
+    out = []
+    try:
+        for row in data.get("data", []):
+            name = (row.get("index") or "").upper().strip()
+            if name in wanted and row.get("last") is not None:
+                out.append({
+                    "sector": name.replace("NIFTY ", "").title(),
+                    "last": round(float(row["last"]), 2),
+                    "change_pct": round(float(row.get("percentChange") or 0), 2),
+                })
+        out.sort(key=lambda x: x["change_pct"], reverse=True)
+        print(f"[OK] get_sector_indices: {len(out)} sectors")
+        return out or None
+    except Exception as e:
+        print(f"[ERROR] get_sector_indices: {e}")
+        return None
+
+
+def get_delivery_pct(symbol: str) -> float | None:
+    """Delivery-to-traded % for an NSE stock — high delivery on an up move
+    hints at genuine (institutional) buying rather than intraday churn."""
+    import urllib.parse
+    data = _fetch_json(
+        f"/api/quote-equity?symbol={urllib.parse.quote(symbol)}&section=trade_info",
+        referer=f"https://www.nseindia.com/get-quotes/equity?symbol={urllib.parse.quote(symbol)}",
+    )
+    try:
+        dp = ((data or {}).get("securityWiseDP") or {}).get("deliveryToTradedQuantity")
+        if dp is None:
+            return None
+        dp = round(float(dp), 2)
+        print(f"[OK] get_delivery_pct({symbol}): {dp}%")
+        return dp
+    except Exception as e:
+        print(f"[WARN] get_delivery_pct({symbol}): {e}")
+        return None
 
 
 def get_fii_dii_data() -> dict | None:

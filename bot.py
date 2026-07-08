@@ -23,7 +23,7 @@ Modules do the real work; this file just wires them together.
 import os
 import sys
 
-from modules import nse_data, market_data, news, ai_engine, telegram, signals, commands
+from modules import nse_data, market_data, news, ai_engine, telegram, signals, commands, premarket
 from modules.market_data import WATCHLIST_INDIA, WATCHLIST_STOCKS_TO_SCAN
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -188,22 +188,32 @@ def _log_snapshot(conn, nse: dict, fii_dii: dict | None = None):
 # ── Flows ─────────────────────────────────────────────────────────────────────
 
 def flow_premarket():
-    nse = {
-        "gift_nifty": market_data.get_gift_nifty(),
-        "vix": nse_data.get_india_vix(),
-        "nifty_chain": nse_data.get_nifty_options_chain(),
-        "fii_dii": nse_data.get_fii_dii_data(),
-    }
-    strategy = _strategy(nse)
-    md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
-    headlines = _collect_headlines()
-    analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
+    """
+    8:15 AM — full AI pre-market pipeline: F&O screener → shortlist deep dive
+    (options ΔOI/IV, delivery %, fundamentals) → sector rotation → Gemini
+    report with ≥85/100 watchlist. Cached to data/premarket_report.json so
+    the command listener can serve /premarket, /watchlist etc. instantly.
+    """
+    report, nse = premarket.generate(_strategy)
 
     conn = signals.init_db()
-    _persist_signals(conn, analysis, md)
     _log_snapshot(conn, nse)
+    for o in ((report.get("call_opportunities") or [])
+              + (report.get("put_opportunities") or [])):
+        try:
+            signals.save_signal(
+                conn,
+                strategy=STRATEGY,
+                symbol=o.get("symbol"),
+                direction="CALL" if o.get("bias") == "bullish" else "PUT",
+                strength=(o.get("confidence_score") or 0) / 100.0,
+                sentiment=None,
+                price_entry=o.get("current_price"),
+            )
+        except Exception as e:
+            print(f"[WARN] flow_premarket persist {o.get('symbol')}: {e}")
 
-    _send(telegram.format_premarket(analysis, md, nse, strategy))
+    _send(telegram.format_ai_premarket(report))
 
 
 def flow_opening():

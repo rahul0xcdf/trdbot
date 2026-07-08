@@ -50,7 +50,9 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    permissions:
+      contents: write   # premarket/eod commit data/ back for persistence
 
     steps:
       - name: Checkout
@@ -107,6 +109,24 @@ jobs:
               'gemini-2.5-flash'
             }}
         run: python bot.py
+
+      # ── Persist generated data back to the repo ─────────────────────────────
+      #    The runner is ephemeral: without this, the premarket report cache
+      #    (served by the command listener) and the signal history DB (used by
+      #    backtest.py) are lost when the job exits.
+      - name: Persist data (report + signal history)
+        if: env.RUN_TYPE == 'premarket' || env.RUN_TYPE == 'eod'
+        run: |
+          git config user.name "market-bot[actions]"
+          git config user.email "actions@users.noreply.github.com"
+          git add -f data/premarket_report.json data/signals.db 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No data changes to persist"
+          else
+            git commit -m "chore: persist ${RUN_TYPE} data ($(date -u +%F))"
+            git pull --rebase origin main || true
+            git push origin HEAD:main || echo "[WARN] data push failed (non-fatal)"
+          fi
 
       # ── On failure — notify Telegram (skip for silent vix_check noise) ─────
       - name: Notify on failure
