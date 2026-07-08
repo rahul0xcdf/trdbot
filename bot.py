@@ -14,6 +14,8 @@ say, scrape the option chain at the EOD run.
     exit_reminder  → 2:45 PM IST  — light: square-off nudge
     eod            → 4:00 PM IST  — FII/DII + OI for tomorrow
     vix_check      → every 30 min — SILENT unless VIX > 18 or |change| > 10%
+    listen         → market hours — answers Telegram slash commands
+                     (long-polls getUpdates for LISTEN_MINUTES minutes)
 
 Modules do the real work; this file just wires them together.
 """
@@ -21,7 +23,7 @@ Modules do the real work; this file just wires them together.
 import os
 import sys
 
-from modules import nse_data, market_data, news, ai_engine, telegram, signals
+from modules import nse_data, market_data, news, ai_engine, telegram, signals, commands
 from modules.market_data import WATCHLIST_INDIA, WATCHLIST_STOCKS_TO_SCAN
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -30,7 +32,7 @@ TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 RUN_TYPE = os.environ.get("RUN_TYPE", "premarket").strip()
-STRATEGY = os.environ.get("STRATEGY", "nifty_intraday").strip()
+STRATEGY = os.environ.get("STRATEGY", "adaptive").strip()
 
 VIX_ALERT_LEVEL = 18.0
 VIX_ALERT_CHANGE_PCT = 10.0
@@ -86,7 +88,51 @@ STRATEGIES = {
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
-def _strategy() -> dict:
+def _adaptive_strategy(nse: dict | None) -> dict:
+    """
+    Derive strategy params from the live regime instead of a fixed config.
+
+    Reads VIX (volatility regime → signal bar + position size), PCR extremes
+    (crowded positioning → demand extra confirmation) and the opening gap.
+    The regime description is folded into the strategy name, which flows into
+    the AI prompt — so Gemini also sees and reasons with the regime.
+    """
+    base = dict(STRATEGIES["nifty_intraday"])
+    vix = ((nse or {}).get("vix") or {}).get("value")
+    pcr = ((nse or {}).get("nifty_chain") or {}).get("pcr")
+    gap = ((nse or {}).get("gift_nifty") or {}).get("gap_pct")
+
+    regime = []
+    if vix is None:
+        regime.append("VIX unavailable, using defaults")
+    elif vix >= 20:
+        base.update(min_signal_strength=0.80, min_sentiment_score=0.70,
+                    risk_per_trade_pct=0.75)
+        regime.append(f"high volatility (VIX {vix}) — take only the strongest "
+                      "setups, prefer defined-risk spreads over naked buys")
+    elif vix >= 15:
+        base.update(min_signal_strength=0.75, risk_per_trade_pct=1.0)
+        regime.append(f"elevated volatility (VIX {vix}) — premiums rich, be selective")
+    else:
+        base.update(min_signal_strength=0.65, risk_per_trade_pct=1.5)
+        regime.append(f"calm tape (VIX {vix}) — premiums cheap, momentum longs viable")
+
+    if pcr is not None and (pcr >= 1.3 or pcr <= 0.7):
+        base["min_signal_strength"] = round(min(base["min_signal_strength"] + 0.05, 0.9), 2)
+        regime.append(f"PCR {pcr} at an extreme — positioning crowded, "
+                      "demand extra confirmation")
+
+    if gap is not None and abs(gap) >= 0.7:
+        regime.append(f"large opening gap ({gap:+.2f}%) — watch for a gap-fade "
+                      "trap in the first 30 minutes")
+
+    base["name"] = "Adaptive: " + "; ".join(regime)
+    return base
+
+
+def _strategy(nse: dict | None = None) -> dict:
+    if STRATEGY == "adaptive":
+        return _adaptive_strategy(nse)
     return STRATEGIES.get(STRATEGY, STRATEGIES["nifty_intraday"])
 
 
@@ -142,13 +188,13 @@ def _log_snapshot(conn, nse: dict, fii_dii: dict | None = None):
 # ── Flows ─────────────────────────────────────────────────────────────────────
 
 def flow_premarket():
-    strategy = _strategy()
     nse = {
         "gift_nifty": market_data.get_gift_nifty(),
         "vix": nse_data.get_india_vix(),
         "nifty_chain": nse_data.get_nifty_options_chain(),
         "fii_dii": nse_data.get_fii_dii_data(),
     }
+    strategy = _strategy(nse)
     md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
     headlines = _collect_headlines()
     analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
@@ -161,11 +207,11 @@ def flow_premarket():
 
 
 def flow_opening():
-    strategy = _strategy()
     nse = {
         "vix": nse_data.get_india_vix(),
         "nifty_chain": nse_data.get_nifty_options_chain(),
     }
+    strategy = _strategy(nse)
     md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
     headlines = _collect_headlines()
     analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
@@ -173,11 +219,11 @@ def flow_opening():
 
 
 def flow_midday(label: str):
-    strategy = _strategy()
     nse = {
         "vix": nse_data.get_india_vix(),
         "nifty_chain": nse_data.get_nifty_options_chain(),
     }
+    strategy = _strategy(nse)
     md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
     headlines = _collect_headlines()
     analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
@@ -186,8 +232,8 @@ def flow_midday(label: str):
 
 def flow_exit_reminder():
     """Light run — no OI scrape; just a square-off nudge with a VIX read."""
-    strategy = _strategy()
     nse = {"vix": nse_data.get_india_vix()}
+    strategy = _strategy(nse)
     md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
     headlines = _collect_headlines()
     analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
@@ -195,13 +241,13 @@ def flow_exit_reminder():
 
 
 def flow_eod():
-    strategy = _strategy()
     fii_dii = nse_data.get_fii_dii_data()
     nse = {
         "vix": nse_data.get_india_vix(),
         "nifty_chain": nse_data.get_nifty_options_chain(),  # OI setup for tomorrow
         "fii_dii": fii_dii,
     }
+    strategy = _strategy(nse)
     md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
     headlines = _collect_headlines()
     analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
@@ -229,6 +275,17 @@ def flow_vix_check():
         print(f"[OK] flow_vix_check: VIX calm ({value}, {change}%) — staying silent")
 
 
+def flow_listen():
+    """Interactive slash-command listener — long-polls Telegram getUpdates."""
+    minutes = float(os.environ.get("LISTEN_MINUTES", "55"))
+    commands.listen(
+        token=TELEGRAM_BOT_TOKEN,
+        chat_id=TELEGRAM_CHAT_ID,
+        strategy_resolver=_strategy,
+        minutes=minutes,
+    )
+
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 FLOWS = {
@@ -240,11 +297,12 @@ FLOWS = {
     "exit_reminder": flow_exit_reminder,
     "eod": flow_eod,
     "vix_check": flow_vix_check,
+    "listen": flow_listen,
 }
 
 
 def main():
-    print(f"\n=== Market Bot — RUN_TYPE={RUN_TYPE} | Strategy={_strategy()['name']} ===\n")
+    print(f"\n=== Market Bot — RUN_TYPE={RUN_TYPE} | Strategy={STRATEGY} ===\n")
     flow = FLOWS.get(RUN_TYPE)
     if flow is None:
         print(f"[ERROR] Unknown RUN_TYPE '{RUN_TYPE}'. Valid: {', '.join(FLOWS)}")
