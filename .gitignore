@@ -10,6 +10,8 @@ env/
 
 # Data & secrets
 data/*.db
+# signals.db is un-ignored: CI commits it back so backtest history accumulates
+!data/signals.db
 data/*.csv
 .env
 *.env

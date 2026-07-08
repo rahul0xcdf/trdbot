@@ -93,8 +93,14 @@ appear in Telegram's `/` autocomplete menu):
 
 | Command | What it does |
 |---|---|
+| `/premarket` | Full AI pre-market report (today's cached copy, or regenerates in 2–4 min) |
+| `/watchlist` | Top call & put opportunities — only setups scoring ≥85/100 |
+| `/market` | Overall market bias, GO/CAUTION/WARNING/STAY-OUT + trading plan |
+| `/sectors` | Live sector strength rankings + rotation read |
+| `/alerts` | Today's events, expiry proximity, macro risks |
+| `/stock RELIANCE` | Deep AI analysis of one stock — technicals, chain, fundamentals (~1 min) |
 | `/price RELIANCE` | Quote + momentum, volume spike, VWAP (also `/price NIFTY`) |
-| `/oi` or `/oi RELIANCE` | Option-chain summary — PCR, max pain, top OI strikes |
+| `/oi` or `/oi RELIANCE` | Option-chain summary — PCR, max pain, ΔOI, IV, top strikes |
 | `/vix` | India VIX + what it means for option premiums |
 | `/fii` | Latest FII/DII net flows |
 | `/news` | Top Indian market headlines (last 12h) |
@@ -102,6 +108,34 @@ appear in Telegram's `/` autocomplete menu):
 | `/strategy` | Currently active strategy params (live, regime-resolved) |
 | `/stats` | Signal win-rate stats from the local DB |
 | `/help`, `/ping` | Command list / liveness check |
+
+---
+
+## AI Pre-Market Screener
+
+The 8:15 AM run is a full research pipeline, not a single AI call:
+
+1. **Quantitative screen** — ~70 liquid F&O stocks, 6 months of daily data in one
+   batch: EMA 20/50/200 alignment, RSI, MACD, Supertrend, ADX, ATR, Bollinger %B,
+   RVOL, market structure (HH/HL), swing support/resistance, 52-week proximity.
+   Each stock gets a bull/bear pre-score; top ~8 per side advance.
+2. **Deep dive (shortlist only)** — live option chain (PCR, max pain, change in
+   OI, ATM IV, put/call-writing signal), delivery %, and fundamentals
+   (PE, ROE, D/E, growth, institutional holding) as a confidence filter.
+3. **Context** — NIFTY + BANKNIFTY chains, India VIX, FII/DII, sector indices,
+   universe breadth (advance/decline), overnight headlines.
+4. **AI ranking** — Gemini scores each candidate /100 (technical 40, options 20,
+   volume 10, news 10, fundamentals 20, minus risk deductions) and only
+   recommends **≥85/100** — with entry zone, stop loss, two targets, risk:reward,
+   strike, expiry, scalping suitability and holding time. If nothing qualifies it
+   says so and recommends capital preservation.
+
+The report is committed to `data/premarket_report.json` so the command listener
+serves `/premarket`, `/watchlist`, `/market` and `/alerts` instantly all day.
+
+**Data honesty:** prices are ~15 min delayed (Yahoo), there is no IV-history for
+IV rank, no promoter-holding/insider feed, and no bulk/block-deal feed — the AI
+is told what it doesn't know. Nothing here is financial advice.
 
 Only your `TELEGRAM_CHAT_ID` is answered — messages from anyone else are ignored.
 Commands sent while no listener is running are answered at the start of the next
