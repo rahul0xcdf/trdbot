@@ -1,0 +1,251 @@
+{
+ "market_outlook": {
+  "sentiment": "bearish",
+  "recommendation": "CAUTION",
+  "confidence": 65,
+  "bullish_prob": 30,
+  "bearish_prob": 55,
+  "rangebound_prob": 15,
+  "why": "Nifty and BankNifty show dominant call writing and low PCR, indicating bearish sentiment. Global cues are mixed with US-Iran tensions, but Asian markets are positive. Domestic breadth is overwhelmingly negative."
+ },
+ "overnight_summary": "Asian markets are showing positive signs with Kospi spiking 3% and Nikkei advancing 1.5% despite renewed US-Iran strikes and tensions in the Hormuz. Brent Crude extends gains above $79 a barrel. GIFT Nifty points to a positive open, contradicting the underlying geopolitical risks.",
+ "domestic_summary": "Yesterday saw a significant fall in Nifty, testing its 50-DMA, with broad-based selling across sectors. Market breadth was poor, with 9 advancing vs 54 declining F&O stocks. FIIs were net buyers, while DIIs were also net buyers. India VIX surged over 26%, indicating increased volatility.",
+ "sector_outlook": {
+  "bullish_sectors": [
+   "Metal",
+   "Pharma",
+   "Healthcare Index"
+  ],
+  "bearish_sectors": [
+   "Psu Bank",
+   "Private Bank",
+   "Bank"
+  ],
+  "comment": "All sectors closed negative yesterday, with PSU Bank, Private Bank, and Bank sectors showing the steepest declines. Metal and Pharma sectors showed relatively less weakness."
+ },
+ "nifty_levels": {
+  "supports": [
+   23500,
+   23000,
+   23600
+  ],
+  "resistances": [
+   24500,
+   24200,
+   24100
+  ]
+ },
+ "banknifty_levels": {
+  "supports": [
+   57000,
+   56000
+  ],
+  "resistances": [
+   59000,
+   60000,
+   58000
+  ]
+ },
+ "call_opportunities": [],
+ "put_opportunities": [
+  {
+   "symbol": "ITC",
+   "current_price": 280.65,
+   "bias": "bearish",
+   "confidence_score": 86,
+   "score_breakdown": {
+    "technical": "36/40",
+    "options": "18/20",
+    "volume": "10/10",
+    "news": "5/10",
+    "fundamentals": "17/20",
+    "risk_deduction": 0
+   },
+   "technical_summary": "ITC is in a bearish trend, trading below key EMAs with a bearish MACD and Supertrend, and RSI in the oversold zone, breaking below previous day's low and near 52-week low.",
+   "fundamental_summary": "ITC has a low PE and strong ROE, but negative revenue and earnings growth, indicating fundamental weakness.",
+   "news_summary": "No specific news for ITC, but general market sentiment is weak.",
+   "entry_zone": "280-281",
+   "stop_loss": 288.38,
+   "target_1": 279.39,
+   "target_2": 275.05,
+   "risk_reward": "1:1.5",
+   "option_type": "PUT",
+   "suggested_strike": "280 PE",
+   "suggested_expiry": "28-Jul-2026",
+   "scalping_suitability": "high",
+   "expected_holding_time": "15-60 min",
+   "key_risks": [
+    "Proximity to 52-week low could trigger bounce",
+    "Low ADX suggests weak trend strength"
+   ],
+   "why_selected": "Strong bearish technicals with price below EMAs, bearish MACD, and Supertrend. Options chain shows dominant call writing and high RVOL, confirming bearish sentiment and institutional interest."
+  },
+  {
+   "symbol": "JINDALSTEL",
+   "current_price": 1021.5,
+   "bias": "bearish",
+   "confidence_score": 85,
+   "score_breakdown": {
+    "technical": "35/40",
+    "options": "18/20",
+    "volume": "6/10",
+    "news": "5/10",
+    "fundamentals": "21/20",
+    "risk_deduction": 0
+   },
+   "technical_summary": "JINDALSTEL is in a strong downtrend, below all key EMAs, with bearish MACD and Supertrend, and RSI in the oversold zone, near its 52-week low.",
+   "fundamental_summary": "JINDALSTEL has a moderate PE and ROE, with positive revenue growth, but institutional holding is moderate.",
+   "news_summary": "No specific news for JINDALSTEL, but general market sentiment is weak.",
+   "entry_zone": "1020-1022",
+   "stop_loss": 1084.06,
+   "target_1": 1000.0,
+   "target_2": 980.0,
+   "risk_reward": "1:1.5",
+   "option_type": "PUT",
+   "suggested_strike": "1020 PE",
+   "suggested_expiry": "28-Jul-2026",
+   "scalping_suitability": "high",
+   "expected_holding_time": "15-60 min",
+   "key_risks": [
+    "RSI is oversold, potential for short-term bounce",
+    "Relatively low RVOL"
+   ],
+   "why_selected": "Clear downtrend with price below EMAs, bearish MACD, and Supertrend. Options chain shows dominant call writing, confirming bearish pressure. Proximity to 52-week low suggests potential for breakdown."
+  },
+  {
+   "symbol": "DMART",
+   "current_price": 4070.9,
+   "bias": "bearish",
+   "confidence_score": 85,
+   "score_breakdown": {
+    "technical": "35/40",
+    "options": "18/20",
+    "volume": "8/10",
+    "news": "5/10",
+    "fundamentals": "19/20",
+    "risk_deduction": 0
+   },
+   "technical_summary": "DMART is in a downtrend, trading below key EMAs with a bearish MACD and Supertrend, and strong 5-day negative momentum.",
+   "fundamental_summary": "DMART has a high PE, but decent ROE and positive revenue/earnings growth, indicating strong underlying business.",
+   "news_summary": "No specific news for DMART, but general market sentiment is weak.",
+   "entry_zone": "4070-4080",
+   "stop_loss": 4202.23,
+   "target_1": 3988.8,
+   "target_2": 3955.0,
+   "risk_reward": "1:1.5",
+   "option_type": "PUT",
+   "suggested_strike": "4050 PE",
+   "suggested_expiry": "28-Jul-2026",
+   "scalping_suitability": "high",
+   "expected_holding_time": "15-60 min",
+   "key_risks": [
+    "RSI is in bearish momentum zone, but not oversold",
+    "Low RVOL suggests less institutional interest"
+   ],
+   "why_selected": "Strong bearish technicals with price below EMAs, bearish MACD, and Supertrend. Options chain shows dominant call writing, confirming bearish sentiment. Strong negative 5-day momentum."
+  }
+ ],
+ "alerts": [
+  "India VIX surged 26.03%, indicating high market volatility.",
+  "US-Iran geopolitical tensions are ongoing, potentially impacting global markets.",
+  "TCS and Anand Rathi Wealth Q1 results are due today, which could cause sector-specific volatility.",
+  "Nifty suffered its biggest fall in three months, testing 50-DMA, suggesting potential for further downside."
+ ],
+ "risk_assessment": [
+  "High VIX indicates increased risk and wider price swings.",
+  "Geopolitical tensions (US-Iran) can lead to sudden market movements.",
+  "Overwhelmingly negative market breadth suggests broad-based weakness.",
+  "Dominant call writing in Nifty and BankNifty indicates strong overhead resistance."
+ ],
+ "trading_plan": {
+  "style": "Scalping",
+  "why": "Given the high volatility (VIX up 26%) and bearish market sentiment, quick intraday scalping on confirmed bearish setups is preferred to manage risk effectively."
+ },
+ "no_trade": false,
+ "no_trade_reason": "",
+ "generated_date": "2026-07-09",
+ "generated_at": "09 Jul 2026 09:09 AM IST",
+ "sectors_raw": [
+  {
+   "sector": "Metal",
+   "last": 12468.7,
+   "change_pct": -0.9
+  },
+  {
+   "sector": "Pharma",
+   "last": 25429.8,
+   "change_pct": -0.96
+  },
+  {
+   "sector": "Healthcare Index",
+   "last": 16145.75,
+   "change_pct": -1.21
+  },
+  {
+   "sector": "Energy",
+   "last": 38695.65,
+   "change_pct": -1.25
+  },
+  {
+   "sector": "Consumer Durables",
+   "last": 37209.6,
+   "change_pct": -1.32
+  },
+  {
+   "sector": "It",
+   "last": 27555.2,
+   "change_pct": -1.37
+  },
+  {
+   "sector": "Realty",
+   "last": 875.95,
+   "change_pct": -1.86
+  },
+  {
+   "sector": "Infrastructure",
+   "last": 9249.95,
+   "change_pct": -2.15
+  },
+  {
+   "sector": "Oil & Gas",
+   "last": 10998.55,
+   "change_pct": -2.22
+  },
+  {
+   "sector": "Auto",
+   "last": 26733.4,
+   "change_pct": -2.23
+  },
+  {
+   "sector": "Media",
+   "last": 1452.45,
+   "change_pct": -2.3
+  },
+  {
+   "sector": "Financial Services",
+   "last": 26323.75,
+   "change_pct": -2.45
+  },
+  {
+   "sector": "Fmcg",
+   "last": 48977.4,
+   "change_pct": -2.48
+  },
+  {
+   "sector": "Bank",
+   "last": 56742.6,
+   "change_pct": -2.5
+  },
+  {
+   "sector": "Private Bank",
+   "last": 27591.65,
+   "change_pct": -2.52
+  },
+  {
+   "sector": "Psu Bank",
+   "last": 8072.3,
+   "change_pct": -2.72
+  }
+ ],
+ "strategy_name": "Nifty Intraday"
+}
