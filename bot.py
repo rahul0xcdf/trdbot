@@ -295,16 +295,32 @@ def flow_vix_check():
         print(f"[OK] flow_vix_check: VIX calm ({value}, {change}%) — staying silent")
 
 
+def _scheduled_listen_minutes(now) -> float:
+    """
+    How long a scheduled listener window should run from `now` (IST).
+
+    Active hours are 6:00 AM–11:30 PM IST; overnight is quiet. Windows are
+    capped at 345 min (GitHub's job limit is 6 h) — starter crons every
+    30 min relay coverage across the day with ~1 min handoff gaps.
+    """
+    if now.hour < 6:
+        return 0.0  # quiet hours
+    cutoff = now.replace(hour=23, minute=30, second=0, microsecond=0)
+    return min((cutoff - now).total_seconds() / 60, 345.0)
+
+
 def flow_listen():
     """Interactive slash-command listener — long-polls Telegram getUpdates."""
     minutes_env = os.environ.get("LISTEN_MINUTES", "").strip()
     if minutes_env:
         minutes = float(minutes_env)  # explicit window (manual dispatch/test)
     else:
-        # Scheduled run: hold the longest window GitHub allows (job cap 6 h).
-        # Starter crons fire every 30 min and queue as the next runner, so
-        # coverage relays around the clock with ~1 min handoff gaps.
-        minutes = 345
+        from datetime import datetime
+        from modules.telegram import IST
+        minutes = _scheduled_listen_minutes(datetime.now(IST))
+        if minutes <= 1:
+            print("[OK] flow_listen: quiet hours (11:30 PM–6 AM IST) — skipping")
+            return
     commands.listen(
         token=TELEGRAM_BOT_TOKEN,
         chat_id=TELEGRAM_CHAT_ID,
