@@ -1,17 +1,16 @@
 name: Telegram Command Listener
 
-# Long-polls Telegram getUpdates so slash commands get answered live.
+# Long-polls Telegram getUpdates so slash commands get answered live, 24/7.
 #
-# GitHub cron is unreliable (2026-07-09: one window never fired, the other
-# started 3.5 h late). So instead of a few precise windows, we fire STARTER
-# crons every 30 min through market hours, and each run listens until just
-# past market close (computed in bot.py). Any single fire that actually runs
-# covers the rest of the day; the later fires are redundant backups.
+# GitHub caps a job at 6 h, so continuous coverage = a relay: each run holds
+# a ~5h45m window, while starter crons fire every 30 min as the next runner
+# in line (they QUEUE behind the active window and take over the moment it
+# exits — handoff gap is ~1 min of job setup). GitHub cron is unreliable
+# (2026-07-09: one fire skipped, another 3.5 h late), which is exactly why
+# the starters are this frequent: any single one that runs covers hours.
 on:
   schedule:
-    # Every 30 min, 2:35–9:35 UTC = 8:05 AM–3:05 PM IST (Mon–Fri).
-    - cron: "5,35 3-9 * * 1-5"
-    - cron: "35 2 * * 1-5"
+    - cron: "5,35 * * * *"   # every 30 min, around the clock, every day
 
   workflow_dispatch:
     inputs:
