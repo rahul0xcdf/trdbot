@@ -7,7 +7,9 @@ market hours via RUN_TYPE=listen) and answers slash commands as they arrive.
 
 Security: only messages from TELEGRAM_CHAT_ID are handled — anything else is
 ignored silently. Commands older than an hour (sent while no listener was up)
-are confirmed but skipped, so a weekend backlog never replays on Monday.
+are not executed — instead the listener sends ONE summary listing what it
+missed, so a weekend backlog never replays on Monday but the user still
+learns the bot was offline.
 """
 
 import html
@@ -358,7 +360,12 @@ def _handle_update(msg: dict, ctx: dict):
     if str(chat_id) != str(ctx["chat_id"]):
         return  # not the owner — ignore silently
     if msg.get("date") and time.time() - msg["date"] > STALE_AFTER:
-        print(f"[OK] listener: skipping stale message from {msg.get('date')}")
+        # Don't execute, but don't vanish either — remember it for the
+        # one-shot "I was offline" summary sent after this batch.
+        print(f"[OK] listener: stale message from {msg.get('date')} — will summarise")
+        ctx.setdefault("stale_skipped", []).append(
+            ((msg.get("text") or "").strip()[:40], msg["date"])
+        )
         return
     text = (msg.get("text") or "").strip()
     if not text:
@@ -431,6 +438,20 @@ def listen(token: str, chat_id: str, strategy_resolver, minutes: float,
                 _handle_update(u.get("message") or {}, ctx)
             except Exception as e:
                 print(f"[ERROR] listener update {u.get('update_id')}: {e}")
+
+        # One courtesy message covering everything sent while no listener
+        # was up (instead of silently dropping it).
+        stale = ctx.pop("stale_skipped", None)
+        if stale:
+            from datetime import datetime
+            from modules.telegram import IST
+            lines = ["😴 <b>I was offline when you sent:</b>"]
+            for text, ts in stale[-10:]:
+                when = datetime.fromtimestamp(ts, IST).strftime("%d %b %I:%M %p")
+                lines.append(f"  • <code>{html.escape(text)}</code>  ({when})")
+            lines.append("")
+            lines.append("I'm listening now — resend any command you still need.")
+            _reply(ctx, "\n".join(lines))
 
     # Confirm the last processed update so the next window doesn't replay it.
     if offset is not None:
