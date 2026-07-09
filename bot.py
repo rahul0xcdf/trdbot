@@ -23,7 +23,8 @@ Modules do the real work; this file just wires them together.
 import os
 import sys
 
-from modules import nse_data, market_data, news, ai_engine, telegram, signals, commands, premarket
+from modules import (nse_data, market_data, news, ai_engine, telegram, signals,
+                     commands, premarket, config)
 from modules.market_data import WATCHLIST_INDIA, WATCHLIST_STOCKS_TO_SCAN
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -32,7 +33,6 @@ TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 RUN_TYPE = os.environ.get("RUN_TYPE", "premarket").strip()
-STRATEGY = os.environ.get("STRATEGY", "adaptive").strip()
 
 VIX_ALERT_LEVEL = 18.0
 VIX_ALERT_CHANGE_PCT = 10.0
@@ -55,7 +55,7 @@ STRATEGIES = {
         "min_signal_strength": 0.7,
         "risk_per_trade_pct": 3.0,
         "dte_range": [14, 30],
-        "watchlist": ["RELIANCE.NS", "TATAMOTORS.NS", "BAJFINANCE.NS",
+        "watchlist": ["RELIANCE.NS", "M&M.NS", "BAJFINANCE.NS",
                       "NVDA", "META", "AMZN", "QQQ"],
     },
     "conservative": {
@@ -72,7 +72,7 @@ STRATEGIES = {
         "min_signal_strength": 0.5,
         "risk_per_trade_pct": 2.5,
         "dte_range": [7, 21],
-        "watchlist": ["RELIANCE.NS", "ZOMATO.NS", "PAYTM.NS",
+        "watchlist": ["RELIANCE.NS", "ETERNAL.NS", "PAYTM.NS",
                       "TSLA", "NVDA", "COIN", "MSTR"],
     },
     "nifty_intraday": {
@@ -130,10 +130,20 @@ def _adaptive_strategy(nse: dict | None) -> dict:
     return base
 
 
+VALID_STRATEGIES = set(STRATEGIES) | {"adaptive"}
+
+
+def _strategy_name() -> str:
+    """Resolved fresh each call so /setstrategy takes effect immediately."""
+    name, _ = config.resolve_strategy_name(VALID_STRATEGIES)
+    return name
+
+
 def _strategy(nse: dict | None = None) -> dict:
-    if STRATEGY == "adaptive":
+    name = _strategy_name()
+    if name == "adaptive":
         return _adaptive_strategy(nse)
-    return STRATEGIES.get(STRATEGY, STRATEGIES["nifty_intraday"])
+    return STRATEGIES.get(name, STRATEGIES["nifty_intraday"])
 
 
 def _send(message: str):
@@ -203,7 +213,7 @@ def flow_premarket():
         try:
             signals.save_signal(
                 conn,
-                strategy=STRATEGY,
+                strategy=_strategy_name(),
                 symbol=o.get("symbol"),
                 direction="CALL" if o.get("bias") == "bullish" else "PUT",
                 strength=(o.get("confidence_score") or 0) / 100.0,
@@ -293,6 +303,8 @@ def flow_listen():
         chat_id=TELEGRAM_CHAT_ID,
         strategy_resolver=_strategy,
         minutes=minutes,
+        valid_strategies=sorted(VALID_STRATEGIES),
+        strategy_name_resolver=lambda: config.resolve_strategy_name(VALID_STRATEGIES),
     )
 
 
@@ -312,7 +324,8 @@ FLOWS = {
 
 
 def main():
-    print(f"\n=== Market Bot — RUN_TYPE={RUN_TYPE} | Strategy={STRATEGY} ===\n")
+    name, source = config.resolve_strategy_name(VALID_STRATEGIES)
+    print(f"\n=== Market Bot — RUN_TYPE={RUN_TYPE} | Strategy={name} (from {source}) ===\n")
     flow = FLOWS.get(RUN_TYPE)
     if flow is None:
         print(f"[ERROR] Unknown RUN_TYPE '{RUN_TYPE}'. Valid: {', '.join(FLOWS)}")

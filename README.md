@@ -106,6 +106,7 @@ appear in Telegram's `/` autocomplete menu):
 | `/news` | Top Indian market headlines (last 12h) |
 | `/analyze` | Full AI analysis on demand (~1–2 min) |
 | `/strategy` | Currently active strategy params (live, regime-resolved) |
+| `/setstrategy adaptive` | Switch the active strategy — persists for all future runs |
 | `/stats` | Signal win-rate stats from the local DB |
 | `/help`, `/ping` | Command list / liveness check |
 
@@ -145,11 +146,23 @@ window (if less than an hour old) or dropped.
 
 ## Switching Strategies
 
-**Option A — GitHub UI (permanent)**  
+**Option A — Telegram (easiest)**  
+Send `/setstrategy momentum` while a listener window is up. It commits
+`data/config.json` to the repo, so every future scheduled run uses it.
+
+**Option B — GitHub UI (fallback)**  
 Settings → Variables → Change `ACTIVE_STRATEGY`
 
-**Option B — Manual run (one-time)**  
-Actions tab → Market Intelligence Bot → Run workflow → pick strategy
+**Option C — Manual run (one-time override)**  
+Actions tab → Market Intelligence Bot → Run workflow → pick a strategy
+(leave it on `configured` to respect Option A/B)
+
+Precedence: manual run input → `/setstrategy` → `ACTIVE_STRATEGY` variable → `adaptive`.
+
+> **On timing:** GitHub Actions cron is best-effort — runs usually start
+> 5–30 minutes late. Crons are set ~10 min before each target time on
+> uncongested minutes to compensate, but exact-minute delivery isn't
+> possible on free CI.
 
 ---
 

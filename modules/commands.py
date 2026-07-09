@@ -16,7 +16,7 @@ import time
 
 import requests
 
-from modules import nse_data, market_data, news, ai_engine, premarket, screener
+from modules import nse_data, market_data, news, ai_engine, premarket, screener, config
 from modules import telegram as tg
 
 POLL_TIMEOUT = 50  # Telegram long-poll seconds per getUpdates call
@@ -38,6 +38,7 @@ COMMANDS = [
     ("news", "Top Indian market headlines"),
     ("analyze", "Full AI analysis on demand (takes ~1 min)"),
     ("strategy", "Show the currently active strategy params"),
+    ("setstrategy", "Switch strategy: /setstrategy adaptive"),
     ("stats", "Signal win-rate stats from the local DB"),
     ("ping", "Check the listener is alive"),
 ]
@@ -161,14 +162,61 @@ def _cmd_strategy(args, ctx) -> str:
         "nifty_chain": nse_data.get_nifty_options_chain(),
     }
     s = ctx["strategy_resolver"](nse)
+    name, source = ctx["strategy_name_resolver"]()
     return "\n".join([
         f"🧭 <b>Active strategy:</b> {html.escape(s['name'])}",
+        f"<i>Selected: {html.escape(name)} (via {html.escape(source)})</i>",
         f"Min signal strength: {s['min_signal_strength']}",
         f"Min sentiment score: {s['min_sentiment_score']}",
         f"Risk per trade: {s['risk_per_trade_pct']}%",
         f"DTE range: {s['dte_range'][0]}–{s['dte_range'][1]} days",
         f"Watchlist: {len(s['watchlist'])} symbols",
+        "",
+        "Switch with /setstrategy &lt;name&gt;",
     ])
+
+
+def _push_config_to_repo() -> bool:
+    """Best-effort commit+push of data/config.json so cron runs pick it up."""
+    import subprocess
+    steps = [
+        ["git", "config", "user.name", "market-bot[actions]"],
+        ["git", "config", "user.email", "actions@users.noreply.github.com"],
+        ["git", "add", "-f", str(config.CONFIG_PATH)],
+        ["git", "commit", "-m", "chore: set strategy via /setstrategy"],
+        ["git", "pull", "--rebase", "origin", "main"],
+        ["git", "push", "origin", "HEAD:main"],
+    ]
+    for cmd in steps:
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode != 0:
+            print(f"[WARN] _push_config_to_repo `{' '.join(cmd)}`: {r.stderr.strip()}")
+            return False
+    print("[OK] _push_config_to_repo: config pushed")
+    return True
+
+
+def _cmd_setstrategy(args, ctx) -> str:
+    valid = ctx.get("valid_strategies") or []
+    options = "\n".join(f"  • <code>{v}</code>" for v in valid)
+    if not args:
+        name, source = ctx["strategy_name_resolver"]()
+        return (f"Current: <b>{html.escape(name)}</b> (via {html.escape(source)})\n\n"
+                f"Usage: <code>/setstrategy adaptive</code>\nAvailable:\n{options}")
+    choice = args[0].strip().lower()
+    if choice not in valid:
+        return (f"Unknown strategy <b>{html.escape(choice)}</b>. Available:\n{options}")
+
+    config.set_strategy(choice)
+    pushed = _push_config_to_repo()
+    note = (
+        "Saved and pushed — all scheduled runs will use it from now on."
+        if pushed else
+        "⚠️ Saved for THIS listener session, but pushing to the repo failed — "
+        "scheduled runs may not see it. Check the Actions log, or set the "
+        "ACTIVE_STRATEGY repo variable as a fallback."
+    )
+    return f"✅ Strategy switched to <b>{html.escape(choice)}</b>.\n{note}"
 
 
 def _cmd_analyze(args, ctx) -> str:
@@ -284,6 +332,7 @@ _HANDLERS = {
     "fii": _cmd_fii,
     "news": _cmd_news,
     "strategy": _cmd_strategy,
+    "setstrategy": _cmd_setstrategy,
     "analyze": _cmd_analyze,
     "stats": _cmd_stats,
 }
@@ -335,7 +384,9 @@ def _handle_update(msg: dict, ctx: dict):
         _reply(ctx, out)
 
 
-def listen(token: str, chat_id: str, strategy_resolver, minutes: float):
+def listen(token: str, chat_id: str, strategy_resolver, minutes: float,
+           valid_strategies: list[str] | None = None,
+           strategy_name_resolver=None):
     """
     Long-poll getUpdates for `minutes`, answering slash commands.
 
@@ -344,7 +395,13 @@ def listen(token: str, chat_id: str, strategy_resolver, minutes: float):
     nothing is lost, and the final confirming call below prevents replays.
     """
     deadline = time.time() + minutes * 60
-    ctx = {"token": token, "chat_id": chat_id, "strategy_resolver": strategy_resolver}
+    ctx = {
+        "token": token,
+        "chat_id": chat_id,
+        "strategy_resolver": strategy_resolver,
+        "valid_strategies": valid_strategies or [],
+        "strategy_name_resolver": strategy_name_resolver or (lambda: ("?", "?")),
+    }
 
     _register_commands(token)
     print(f"[OK] listener: up for {minutes:.0f} min")

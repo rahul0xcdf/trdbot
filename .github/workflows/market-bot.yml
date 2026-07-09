@@ -2,15 +2,18 @@ name: Market Intelligence Bot
 
 on:
   # ── Scheduled runs (all cron in UTC; comments show IST) — Mon–Fri ──────────
+  # GitHub cron is best-effort and usually fires 5–30 min LATE, worst at
+  # congested minutes (:00/:30). So each job is scheduled ~10 min before its
+  # target IST time, on uncongested minutes, to land near the target.
   schedule:
-    - cron: "45 2 * * 1-5"      # 8:15 AM IST  → premarket
-    - cron: "0 4 * * 1-5"       # 9:30 AM IST  → opening
-    - cron: "30 5 * * 1-5"      # 11:00 AM IST → midmorning
-    - cron: "0 7 * * 1-5"       # 12:30 PM IST → european_open
-    - cron: "0 8 * * 1-5"       # 1:30 PM IST  → london_us
-    - cron: "15 9 * * 1-5"      # 2:45 PM IST  → exit_reminder
-    - cron: "30 10 * * 1-5"     # 4:00 PM IST  → eod
-    - cron: "*/30 4-10 * * 1-5" # every 30 min market hours → vix_check
+    - cron: "33 2 * * 1-5"      # target 8:15 AM IST  → premarket
+    - cron: "52 3 * * 1-5"      # target 9:30 AM IST  → opening
+    - cron: "23 5 * * 1-5"      # target 11:00 AM IST → midmorning
+    - cron: "53 6 * * 1-5"      # target 12:30 PM IST → european_open
+    - cron: "53 7 * * 1-5"      # target 1:30 PM IST  → london_us
+    - cron: "9 9 * * 1-5"       # target 2:45 PM IST  → exit_reminder
+    - cron: "23 10 * * 1-5"     # target 4:00 PM IST  → eod
+    - cron: "11,41 4-10 * * 1-5" # ~every 30 min market hours → vix_check
 
   # ── Manual trigger (for testing any flow on demand) ────────────────────────
   workflow_dispatch:
@@ -30,11 +33,12 @@ on:
           - eod
           - vix_check
       strategy:
-        description: "Strategy to use"
+        description: "Strategy (configured = whatever /setstrategy or ACTIVE_STRATEGY says)"
         required: false
-        default: "adaptive"
+        default: "configured"
         type: choice
         options:
+          - configured
           - adaptive
           - nifty_intraday
           - balanced
@@ -75,15 +79,15 @@ jobs:
             RUN_TYPE="${{ github.event.inputs.run_type }}"
           else
             case "${{ github.event.schedule }}" in
-              "45 2 * * 1-5")      RUN_TYPE=premarket ;;
-              "0 4 * * 1-5")       RUN_TYPE=opening ;;
-              "30 5 * * 1-5")      RUN_TYPE=midmorning ;;
-              "0 7 * * 1-5")       RUN_TYPE=european_open ;;
-              "0 8 * * 1-5")       RUN_TYPE=london_us ;;
-              "15 9 * * 1-5")      RUN_TYPE=exit_reminder ;;
-              "30 10 * * 1-5")     RUN_TYPE=eod ;;
-              "*/30 4-10 * * 1-5") RUN_TYPE=vix_check ;;
-              *)                   RUN_TYPE=premarket ;;
+              "33 2 * * 1-5")        RUN_TYPE=premarket ;;
+              "52 3 * * 1-5")        RUN_TYPE=opening ;;
+              "23 5 * * 1-5")        RUN_TYPE=midmorning ;;
+              "53 6 * * 1-5")        RUN_TYPE=european_open ;;
+              "53 7 * * 1-5")        RUN_TYPE=london_us ;;
+              "9 9 * * 1-5")         RUN_TYPE=exit_reminder ;;
+              "23 10 * * 1-5")       RUN_TYPE=eod ;;
+              "11,41 4-10 * * 1-5")  RUN_TYPE=vix_check ;;
+              *)                     RUN_TYPE=premarket ;;
             esac
           fi
           echo "RUN_TYPE=$RUN_TYPE" >> "$GITHUB_ENV"
@@ -96,12 +100,11 @@ jobs:
           TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
           GNEWS_API_KEY:       ${{ secrets.GNEWS_API_KEY }}
           RUN_TYPE:            ${{ env.RUN_TYPE }}
-          STRATEGY: >-
-            ${{
-              github.event.inputs.strategy ||
-              vars.ACTIVE_STRATEGY ||
-              'adaptive'
-            }}
+          # Precedence lives in modules/config.py: explicit STRATEGY input →
+          # data/config.json (/setstrategy) → ACTIVE_STRATEGY_VAR → adaptive.
+          # "configured" is not a real strategy, so it falls through to config.
+          STRATEGY: ${{ github.event.inputs.strategy || '' }}
+          ACTIVE_STRATEGY_VAR: ${{ vars.ACTIVE_STRATEGY || '' }}
           GEMINI_MODEL: >-
             ${{
               github.event.inputs.model ||

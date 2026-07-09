@@ -284,24 +284,52 @@ def get_sector_indices() -> list[dict] | None:
         return None
 
 
-def get_delivery_pct(symbol: str) -> float | None:
-    """Delivery-to-traded % for an NSE stock — high delivery on an up move
-    hints at genuine (institutional) buying rather than intraday churn."""
-    import urllib.parse
-    data = _fetch_json(
-        f"/api/quote-equity?symbol={urllib.parse.quote(symbol)}&section=trade_info",
-        referer=f"https://www.nseindia.com/get-quotes/equity?symbol={urllib.parse.quote(symbol)}",
-    )
-    try:
-        dp = ((data or {}).get("securityWiseDP") or {}).get("deliveryToTradedQuantity")
-        if dp is None:
-            return None
-        dp = round(float(dp), 2)
-        print(f"[OK] get_delivery_pct({symbol}): {dp}%")
-        return dp
-    except Exception as e:
-        print(f"[WARN] get_delivery_pct({symbol}): {e}")
-        return None
+def get_delivery_map() -> dict[str, float]:
+    """
+    Delivery-to-traded % for ALL NSE stocks from the daily bhavcopy archive
+    (archives.nseindia.com — static host, no cookie dance, one request).
+    High delivery on an up move hints at genuine institutional buying rather
+    than intraday churn.
+
+    The /api/quote-equity endpoint 403s for non-browser clients, so this CSV
+    is the reliable route. Walks back up to 5 days to find the latest session.
+
+    Returns {SYMBOL: delivery_pct} for the EQ series; empty dict on failure.
+    """
+    from datetime import datetime, timedelta
+
+    for days_back in range(1, 6):
+        day = datetime.now() - timedelta(days=days_back)
+        url = (
+            "https://archives.nseindia.com/products/content/"
+            f"sec_bhavdata_full_{day.strftime('%d%m%Y')}.csv"
+        )
+        try:
+            r = requests.get(url, timeout=TIMEOUT,
+                             headers={"User-Agent": _HEADERS["User-Agent"]})
+            if r.status_code != 200:
+                continue  # weekend/holiday — try the previous day
+            out: dict[str, float] = {}
+            lines = r.text.splitlines()
+            header = [h.strip() for h in lines[0].split(",")]
+            i_sym = header.index("SYMBOL")
+            i_series = header.index("SERIES")
+            i_dp = header.index("DELIV_PER")
+            for line in lines[1:]:
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) <= i_dp or parts[i_series] != "EQ":
+                    continue
+                try:
+                    out[parts[i_sym]] = round(float(parts[i_dp]), 2)
+                except ValueError:
+                    continue  # DELIV_PER can be '-'
+            print(f"[OK] get_delivery_map: {len(out)} stocks "
+                  f"({day.strftime('%d-%b-%Y')})")
+            return out
+        except Exception as e:
+            print(f"[WARN] get_delivery_map {day.strftime('%d%m%Y')}: {e}")
+    print("[ERROR] get_delivery_map: no bhavcopy found in last 5 days")
+    return {}
 
 
 def get_fii_dii_data() -> dict | None:

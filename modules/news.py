@@ -18,6 +18,7 @@ INDIAN_RSS_FEEDS = [
     ("Economic Times", "https://economictimes.indiatimes.com/markets/rss.cms"),
     ("Moneycontrol", "https://www.moneycontrol.com/rss/marketreports.xml"),
     ("NDTV Profit", "https://feeds.feedburner.com/ndtvprofit-latest"),
+    ("Livemint", "https://www.livemint.com/rss/markets"),
 ]
 
 _LOOKBACK = timedelta(hours=12)
