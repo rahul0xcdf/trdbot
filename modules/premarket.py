@@ -44,8 +44,9 @@ def generate(strategy_resolver) -> tuple[dict, dict]:
     bulls, bears = screener.shortlist(rows)
 
     # 3. Deep dive only on the shortlist (options chain, delivery, fundamentals)
-    screener.deep_dive(bulls)
-    screener.deep_dive(bears)
+    delivery_map = nse_data.get_delivery_map()
+    screener.deep_dive(bulls, delivery_map=delivery_map)
+    screener.deep_dive(bears, delivery_map=delivery_map)
 
     scan = {
         "total": len(rows),

@@ -29,7 +29,10 @@ def rsi(close: pd.Series, n: int = 14) -> pd.Series:
     gain = delta.clip(lower=0).ewm(alpha=1 / n, adjust=False).mean()
     loss = (-delta.clip(upper=0)).ewm(alpha=1 / n, adjust=False).mean()
     rs = gain / loss.replace(0, pd.NA)
-    return 100 - (100 / (1 + rs))
+    out = 100 - (100 / (1 + rs))
+    # Zero average loss → pure uptrend, RSI 100; flat series → neutral 50.
+    out = out.mask(loss == 0, 100.0).mask((loss == 0) & (gain == 0), 50.0)
+    return out
 
 
 def macd(close: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series]:
@@ -139,6 +142,11 @@ def compute_snapshot(df: pd.DataFrame) -> dict | None:
     Returns None if there isn't enough data to say anything useful.
     """
     try:
+        # yfinance batch downloads can hand back object-dtype columns for some
+        # tickers (seen on CI with pandas 4: "No numeric types to aggregate"),
+        # so coerce everything numeric before any math.
+        df = df[["Open", "High", "Low", "Close", "Volume"]].apply(
+            pd.to_numeric, errors="coerce")
         df = df.dropna(subset=["Close"])
         if len(df) < 30:
             return None

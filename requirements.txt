@@ -1,4 +1,4 @@
-yfinance==0.2.61
+yfinance>=0.2.61,<0.4
 requests==2.32.3
 pytz==2024.2
 feedparser==6.0.11

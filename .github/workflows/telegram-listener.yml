@@ -5,8 +5,9 @@ name: Telegram Command Listener
 # NOTE: GitHub cron can fire several minutes late — coverage starts then.
 on:
   schedule:
-    - cron: "30 3 * * 1-5"   # 9:00 AM IST  → listens until ~12:15 PM
-    - cron: "45 6 * * 1-5"   # 12:15 PM IST → listens until ~3:30 PM
+    # Scheduled ~10 min early — GitHub cron usually fires 5–30 min late.
+    - cron: "20 3 * * 1-5"   # target 9:00 AM IST  → listens ~3h15m
+    - cron: "35 6 * * 1-5"   # target 12:15 PM IST → listens ~3h15m
 
   workflow_dispatch:
     inputs:
@@ -26,6 +27,8 @@ jobs:
   listen:
     runs-on: ubuntu-latest
     timeout-minutes: 210
+    permissions:
+      contents: write   # /setstrategy commits data/config.json back to main
 
     steps:
       - name: Checkout
@@ -48,6 +51,8 @@ jobs:
           GNEWS_API_KEY:      ${{ secrets.GNEWS_API_KEY }}
           RUN_TYPE: listen
           LISTEN_MINUTES: ${{ github.event.inputs.minutes || '195' }}
-          STRATEGY: ${{ vars.ACTIVE_STRATEGY || 'adaptive' }}
+          # No STRATEGY here — the listener resolves data/config.json
+          # (/setstrategy) → ACTIVE_STRATEGY_VAR → adaptive, live per command.
+          ACTIVE_STRATEGY_VAR: ${{ vars.ACTIVE_STRATEGY || '' }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
         run: python bot.py

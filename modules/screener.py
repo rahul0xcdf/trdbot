@@ -25,11 +25,13 @@ FNO_UNIVERSE = [
     "HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "AXISBANK.NS", "KOTAKBANK.NS",
     "INDUSINDBK.NS", "BANKBARODA.NS", "PNB.NS", "CANBK.NS", "BAJFINANCE.NS",
     "BAJAJFINSV.NS", "HDFCLIFE.NS", "SBILIFE.NS", "CHOLAFIN.NS", "SHRIRAMFIN.NS",
-    # IT
-    "TCS.NS", "INFY.NS", "WIPRO.NS", "HCLTECH.NS", "TECHM.NS", "LTIM.NS",
-    # Auto
-    "TATAMOTORS.NS", "M&M.NS", "MARUTI.NS", "BAJAJ-AUTO.NS", "EICHERMOT.NS",
-    "HEROMOTOCO.NS", "TVSMOTOR.NS",
+    # IT  (LTIM.NS delisted from Yahoo — re-add under its new symbol if listed)
+    "TCS.NS", "INFY.NS", "WIPRO.NS", "HCLTECH.NS", "TECHM.NS",
+    "PERSISTENT.NS", "COFORGE.NS",
+    # Auto (TATAMOTORS.NS gone after the CV/PV demerger — re-add the new
+    # post-demerger symbols once confirmed on Yahoo)
+    "M&M.NS", "MARUTI.NS", "BAJAJ-AUTO.NS", "EICHERMOT.NS",
+    "HEROMOTOCO.NS", "TVSMOTOR.NS", "ASHOKLEY.NS",
     # Metals / commodities
     "TATASTEEL.NS", "JSWSTEEL.NS", "HINDALCO.NS", "VEDL.NS", "JINDALSTEL.NS",
     "NMDC.NS", "SAIL.NS",
@@ -137,7 +139,7 @@ def screen_universe(symbols: list[str] | None = None) -> list[dict]:
     symbols = symbols or FNO_UNIVERSE
     try:
         data = yf.download(
-            symbols, period="6mo", interval="1d",
+            symbols, period="6mo", interval="1d", auto_adjust=True,
             group_by="ticker", threads=True, progress=False,
         )
     except Exception as e:
@@ -195,15 +197,19 @@ def fetch_fundamentals(yf_symbol: str) -> dict:
         return {}
 
 
-def deep_dive(candidates: list[dict], pause: float = 1.0) -> list[dict]:
+def deep_dive(candidates: list[dict], pause: float = 1.0,
+              delivery_map: dict | None = None) -> list[dict]:
     """
     Enrich shortlisted candidates in place with options chain, delivery %
-    and fundamentals. Paced to stay under NSE rate limits.
+    and fundamentals. Paced to stay under NSE rate limits. Pass a shared
+    delivery_map (from nse_data.get_delivery_map) to avoid refetching.
     """
+    if delivery_map is None:
+        delivery_map = nse_data.get_delivery_map()
     for c in candidates:
         nse_sym = _nse_symbol(c["symbol"])
         c["options"] = nse_data.get_stock_options_oi(nse_sym)
-        c["delivery_pct"] = nse_data.get_delivery_pct(nse_sym)
+        c["delivery_pct"] = delivery_map.get(nse_sym)
         c["fundamentals"] = fetch_fundamentals(c["symbol"])
         time.sleep(pause)
     return candidates
