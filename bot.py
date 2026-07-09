@@ -169,7 +169,7 @@ def _persist_signals(conn, analysis: dict, market_data_rows: list[dict]):
         try:
             signals.save_signal(
                 conn,
-                strategy=STRATEGY,
+                strategy=_strategy_name(),
                 symbol=symbol,
                 direction=s.get("direction", "HOLD"),
                 strength=s.get("signal_strength"),
@@ -297,7 +297,22 @@ def flow_vix_check():
 
 def flow_listen():
     """Interactive slash-command listener — long-polls Telegram getUpdates."""
-    minutes = float(os.environ.get("LISTEN_MINUTES", "55"))
+    minutes_env = os.environ.get("LISTEN_MINUTES", "").strip()
+    if minutes_env:
+        minutes = float(minutes_env)  # explicit window (manual dispatch/test)
+    else:
+        # Scheduled run: listen until just past market close (15:35 IST) so a
+        # single successful cron fire covers the whole day even when GitHub
+        # skips or delays later fires. Capped under the 6-hour job limit — a
+        # queued backup run picks up the tail.
+        from datetime import datetime
+        from modules.telegram import IST
+        now = datetime.now(IST)
+        close = now.replace(hour=15, minute=35, second=0, microsecond=0)
+        minutes = min((close - now).total_seconds() / 60, 345)
+        if minutes <= 1:
+            print("[OK] flow_listen: market closed — nothing to listen for")
+            return
     commands.listen(
         token=TELEGRAM_BOT_TOKEN,
         chat_id=TELEGRAM_CHAT_ID,
