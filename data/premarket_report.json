@@ -1,251 +1,285 @@
 {
  "market_outlook": {
-  "sentiment": "bullish",
-  "recommendation": "GO",
-  "confidence": 80,
-  "bullish_prob": 70,
-  "bearish_prob": 15,
-  "rangebound_prob": 15,
-  "why": "NIFTY and BANKNIFTY show dominant put writing, indicating strong support and bullish sentiment. A large opening gap combined with low VIX suggests momentum longs are viable, but initial gap-fade risk needs monitoring."
+  "sentiment": "mixed",
+  "recommendation": "CAUTION",
+  "confidence": 60,
+  "bullish_prob": 40,
+  "bearish_prob": 35,
+  "rangebound_prob": 25,
+  "why": "NIFTY shows bullish support from put writing, but its PCR is at an extreme, suggesting crowded positioning. BANKNIFTY is balanced. Global cues are unknown, and domestic breadth is negative, warranting caution despite low VIX."
  },
- "overnight_summary": "No specific US/Europe/Asia/GIFT/crude/USDINR data provided, but the large opening gap in NIFTY (+0.81%) suggests positive global cues or strong domestic buying interest from yesterday's close.",
- "domestic_summary": "Yesterday saw broad market strength with 58 advancing vs 7 declining F&O stocks. DIIs were significant net buyers, offsetting FII selling. India VIX is down 7.1% to 12.41, indicating low volatility and cheap premiums.",
+ "overnight_summary": "No specific US/Europe/Asia/GIFT/crude/USDINR data provided, so global cues are unknown. Yesterday's domestic market saw Nifty slide near 24,100, indicating some bearish pressure.",
+ "domestic_summary": "Yesterday's market saw NIFTY slide near 24,100. Market breadth was negative with 13 advancing and 46 declining F&O stocks. FIIs were net buyers (\u20b92603.72 cr) and DIIs were also net buyers (\u20b92019.68 cr). India VIX is low at 13.32, suggesting cheap premiums.",
  "sector_outlook": {
   "bullish_sectors": [
-   "Metal",
    "It",
-   "Realty"
+   "Consumer Durables",
+   "Media"
   ],
   "bearish_sectors": [
    "Fmcg",
-   "Healthcare Index",
-   "Pharma"
+   "Metal",
+   "Realty"
   ],
-  "comment": "Strong performance in Metal, IT, and Realty sectors suggests potential for continued momentum. FMCG and Healthcare showed weakness, indicating sector-specific headwinds."
+  "comment": "IT, Consumer Durables, and Media showed strong performance yesterday, while FMCG, Metal, and Realty sectors lagged significantly. This suggests a potential rotation towards growth-oriented sectors."
  },
  "nifty_levels": {
   "supports": [
-   24150,
    24000,
-   23500
+   24100,
+   23800
   ],
   "resistances": [
+   24500,
    24200,
-   24300,
-   24500
+   24300
   ]
  },
  "banknifty_levels": {
   "supports": [
-   57900,
-   57000,
-   56000
+   58000,
+   59000,
+   57000
   ],
   "resistances": [
-   58000,
-   58500,
-   59000
+   59000,
+   60000,
+   58000
   ]
  },
  "call_opportunities": [
   {
    "symbol": "TITAN",
-   "current_price": 4593.6,
+   "current_price": 4594.9,
    "bias": "bullish",
    "confidence_score": 88,
    "score_breakdown": {
-    "technical": "36/40",
-    "options": "18/20",
-    "volume": "3/10",
+    "technical": "35/40",
+    "options": "15/20",
+    "volume": "5/10",
     "news": "5/10",
-    "fundamentals": "18/20",
+    "fundamentals": "20/20",
     "risk_deduction": -2
    },
-   "technical_summary": "Strong uptrend with price above key EMAs, bullish RSI/MACD, and Supertrend 'up'. Within 3% of 52-week high, indicating breakout potential.",
-   "fundamental_summary": "Strong revenue and earnings growth, high ROE, but high debt-to-equity.",
-   "news_summary": "No specific news, general positive market sentiment.",
+   "technical_summary": "Strong uptrend with price above EMAs, bullish RSI/MACD, and Supertrend 'up', near 52-week high.",
+   "fundamental_summary": "Strong revenue and earnings growth, high ROE, but high PE and debt-to-equity.",
+   "news_summary": "No specific news.",
    "entry_zone": "4590-4600",
-   "stop_loss": 4500.0,
+   "stop_loss": 4520.0,
    "target_1": 4650.0,
    "target_2": 4700.0,
-   "risk_reward": "1:1.5",
+   "risk_reward": "1:1.4",
    "option_type": "CALL",
    "suggested_strike": "4600 CE",
    "suggested_expiry": "28-Jul-2026",
    "scalping_suitability": "high",
    "expected_holding_time": "15-60 min",
    "key_risks": [
-    "Low RVOL (0.27) suggests lower intraday volatility than average",
-    "High PE ratio (80.7)"
+    "High PE ratio",
+    "Low relative volume (0.25)"
    ],
-   "why_selected": "Strong technical setup with clear bullish momentum and proximity to 52-week high. Options chain shows dominant put writing at ATM, providing good support for upward movement."
+   "why_selected": "TITAN exhibits strong bullish technicals, trading near its 52-week high with good momentum. Options chain is balanced, and fundamentals are robust, making it a strong candidate for momentum long."
   },
   {
    "symbol": "LUPIN",
-   "current_price": 2503.3,
+   "current_price": 2492.6,
    "bias": "bullish",
    "confidence_score": 86,
    "score_breakdown": {
     "technical": "35/40",
-    "options": "12/20",
-    "volume": "3/10",
+    "options": "10/20",
+    "volume": "5/10",
     "news": "5/10",
-    "fundamentals": "18/20",
+    "fundamentals": "20/20",
     "risk_deduction": -2
    },
-   "technical_summary": "Clear uptrend with price above EMAs, bullish MACD, strong ADX, and within 1% of 52-week high.",
-   "fundamental_summary": "Strong earnings and revenue growth, healthy ROE.",
-   "news_summary": "No specific news, general positive market sentiment.",
-   "entry_zone": "2500-2510",
+   "technical_summary": "Strong uptrend with price above EMAs, bullish RSI/MACD, and Supertrend 'up', near 52-week high.",
+   "fundamental_summary": "Excellent revenue and earnings growth with strong ROE and reasonable PE.",
+   "news_summary": "No specific news.",
+   "entry_zone": "2490-2500",
    "stop_loss": 2450.0,
    "target_1": 2520.0,
    "target_2": 2550.0,
-   "risk_reward": "1:1.5",
+   "risk_reward": "1:1.4",
    "option_type": "CALL",
    "suggested_strike": "2500 CE",
    "suggested_expiry": "28-Jul-2026",
    "scalping_suitability": "high",
    "expected_holding_time": "15-60 min",
    "key_risks": [
-    "Options chain shows call writing dominant, indicating potential overhead resistance",
-    "Low RVOL (0.29)"
+    "Call writing dominant in options chain",
+    "Low relative volume (0.41)"
    ],
-   "why_selected": "Excellent technical strength with strong momentum and near 52-week high. While options show some call writing, the overall market bullishness and stock's momentum can overcome it."
-  },
+   "why_selected": "LUPIN shows strong bullish technicals, trading near its 52-week high with good momentum. Despite call writing, the overall technical strength and robust fundamentals make it attractive for a momentum long."
+  }
+ ],
+ "put_opportunities": [
   {
-   "symbol": "DLF",
-   "current_price": 686.0,
-   "bias": "bullish",
-   "confidence_score": 85,
+   "symbol": "VEDL",
+   "current_price": 269.45,
+   "bias": "bearish",
+   "confidence_score": 87,
    "score_breakdown": {
-    "technical": "34/40",
+    "technical": "35/40",
     "options": "15/20",
-    "volume": "10/10",
+    "volume": "5/10",
     "news": "5/10",
-    "fundamentals": "16/20",
-    "risk_deduction": 0
+    "fundamentals": "10/20",
+    "risk_deduction": -2
    },
-   "technical_summary": "Strong uptrend, price above EMAs, bullish RSI/MACD, and broke previous high. High RVOL suggests strong institutional interest.",
-   "fundamental_summary": "Mixed fundamentals with strong PE but negative revenue/earnings growth.",
-   "news_summary": "No specific news, general positive market sentiment.",
-   "entry_zone": "685-690",
-   "stop_loss": 670.0,
-   "target_1": 700.0,
-   "target_2": 710.0,
-   "risk_reward": "1:1.5",
-   "option_type": "CALL",
-   "suggested_strike": "690 CE",
+   "technical_summary": "Strong downtrend with price below EMAs, bearish RSI, and Supertrend 'down', near 52-week low.",
+   "fundamental_summary": "Mixed fundamentals with negative revenue growth but high earnings growth.",
+   "news_summary": "Reliance Infrastructure shares hit lower circuit for fifth straight session, indicating broader weakness in infrastructure/metal related stocks.",
+   "entry_zone": "268-270",
+   "stop_loss": 275.0,
+   "target_1": 260.0,
+   "target_2": 250.0,
+   "risk_reward": "1:2.0",
+   "option_type": "PUT",
+   "suggested_strike": "270 PE",
    "suggested_expiry": "28-Jul-2026",
    "scalping_suitability": "high",
    "expected_holding_time": "15-60 min",
    "key_risks": [
-    "Structure is 'range' despite other bullish signals",
-    "Negative revenue/earnings growth"
+    "MACD bullish despite bearish trend",
+    "Low relative volume (0.15)"
    ],
-   "why_selected": "Exceptional volume confirmation (RVOL 1.56x) combined with strong technicals and a breakout above previous high. Options chain is balanced, not posing significant resistance."
+   "why_selected": "VEDL is in a clear downtrend, breaking previous lows and trading near its 52-week low. Strong call writing in the options chain provides bearish confirmation, making it a high-probability short candidate."
+  },
+  {
+   "symbol": "JINDALSTEL",
+   "current_price": 1029.7,
+   "bias": "bearish",
+   "confidence_score": 85,
+   "score_breakdown": {
+    "technical": "35/40",
+    "options": "15/20",
+    "volume": "5/10",
+    "news": "5/10",
+    "fundamentals": "10/20",
+    "risk_deduction": -2
+   },
+   "technical_summary": "Strong downtrend with price below EMAs, bearish RSI, and Supertrend 'down', near 52-week low.",
+   "fundamental_summary": "Positive revenue growth but low ROE and high PE.",
+   "news_summary": "No specific news.",
+   "entry_zone": "1025-1030",
+   "stop_loss": 1040.0,
+   "target_1": 1000.0,
+   "target_2": 980.0,
+   "risk_reward": "1:2.5",
+   "option_type": "PUT",
+   "suggested_strike": "1030 PE",
+   "suggested_expiry": "28-Jul-2026",
+   "scalping_suitability": "high",
+   "expected_holding_time": "15-60 min",
+   "key_risks": [
+    "MACD bullish despite bearish trend",
+    "Low relative volume (0.68)"
+   ],
+   "why_selected": "JINDALSTEL is in a strong downtrend, breaking previous lows and trading near its 52-week low. Call writing in the options chain confirms bearish sentiment, making it suitable for a short position."
   }
  ],
- "put_opportunities": [],
  "alerts": [
-  "India VIX is low (12.41), indicating cheap premiums but also potential for sharp moves if volatility picks up.",
-  "Large opening gap (+0.81%) in NIFTY, watch for gap-fade traps in the first 30 minutes.",
-  "FIIs were net sellers yesterday, DIIs were net buyers. Continued FII selling could cap upside."
+  "NIFTY PCR at 1.57 is extremely high, indicating potential for a reversal or profit-booking if bullish momentum falters.",
+  "India VIX is low (13.32), implying cheap premiums but also potential for sharp moves if volatility picks up.",
+  "Earnings season is ongoing, with HCL Tech Q1 results in focus today. This could introduce stock-specific volatility.",
+  "Reliance Infrastructure shares hitting lower circuit for fifth straight session highlights sector-specific risks."
  ],
  "risk_assessment": [
-  "Initial gap-fade risk in the first 30 minutes, especially for NIFTY.",
-  "Low VIX means options premiums are cheap, but also that price moves can be swift and stop losses need to be tight.",
-  "Some bullish candidates show dominant call writing in their options chain, indicating potential overhead resistance.",
-  "Global cues are not explicitly provided, which could introduce unknown risks."
+  "NIFTY's extreme PCR (1.57) suggests crowded long positioning, increasing risk of a sharp correction.",
+  "Low VIX implies cheap premiums, but also means less buffer for adverse moves; momentum trades require quick execution.",
+  "Negative market breadth (13 adv / 46 dec) indicates underlying weakness despite FII/DII buying.",
+  "Several bullish candidates have dominant call writing in their options chains, indicating overhead resistance."
  ],
  "trading_plan": {
-  "style": "Scalping",
-  "why": "Calm tape with cheap premiums and momentum potential makes scalping viable. Focus on strong technical setups with options confirmation and volume."
+  "style": "Momentum | Scalping",
+  "why": "Given the calm tape (low VIX) and cheap premiums, momentum-based scalping is viable. However, extreme NIFTY PCR and negative breadth warrant reduced size and strict risk management."
  },
  "no_trade": false,
  "no_trade_reason": "",
- "generated_date": "2026-07-10",
- "generated_at": "10 Jul 2026 11:56 AM IST",
+ "generated_date": "2026-07-13",
+ "generated_at": "13 Jul 2026 11:22 AM IST",
  "sectors_raw": [
   {
-   "sector": "Metal",
-   "last": 12701.45,
-   "change_pct": 1.58
-  },
-  {
    "sector": "It",
-   "last": 27881.65,
-   "change_pct": 1.49
-  },
-  {
-   "sector": "Realty",
-   "last": 918.0,
-   "change_pct": 1.22
+   "last": 28614.85,
+   "change_pct": 2.16
   },
   {
    "sector": "Consumer Durables",
-   "last": 38279.25,
-   "change_pct": 1.17
-  },
-  {
-   "sector": "Oil & Gas",
-   "last": 11161.0,
-   "change_pct": 1.16
-  },
-  {
-   "sector": "Private Bank",
-   "last": 28070.4,
-   "change_pct": 1.11
-  },
-  {
-   "sector": "Bank",
-   "last": 57851.45,
-   "change_pct": 1.05
-  },
-  {
-   "sector": "Psu Bank",
-   "last": 8286.6,
-   "change_pct": 1.02
-  },
-  {
-   "sector": "Financial Services",
-   "last": 26747.15,
-   "change_pct": 1.0
-  },
-  {
-   "sector": "Energy",
-   "last": 39204.8,
-   "change_pct": 0.94
-  },
-  {
-   "sector": "Infrastructure",
-   "last": 9406.15,
-   "change_pct": 0.86
+   "last": 38678.85,
+   "change_pct": 1.23
   },
   {
    "sector": "Media",
-   "last": 1493.1,
-   "change_pct": 0.69
+   "last": 1499.55,
+   "change_pct": 1.03
   },
   {
    "sector": "Auto",
-   "last": 26843.65,
-   "change_pct": 0.63
+   "last": 26907.0,
+   "change_pct": 0.17
+  },
+  {
+   "sector": "Private Bank",
+   "last": 28030.1,
+   "change_pct": -0.19
+  },
+  {
+   "sector": "Bank",
+   "last": 57894.55,
+   "change_pct": -0.26
+  },
+  {
+   "sector": "Energy",
+   "last": 39129.25,
+   "change_pct": -0.29
+  },
+  {
+   "sector": "Financial Services",
+   "last": 26748.75,
+   "change_pct": -0.31
+  },
+  {
+   "sector": "Oil & Gas",
+   "last": 11141.35,
+   "change_pct": -0.32
+  },
+  {
+   "sector": "Psu Bank",
+   "last": 8412.4,
+   "change_pct": -0.46
   },
   {
    "sector": "Pharma",
-   "last": 25655.25,
-   "change_pct": 0.0
+   "last": 25531.05,
+   "change_pct": -0.56
   },
   {
    "sector": "Healthcare Index",
-   "last": 16302.7,
-   "change_pct": -0.03
+   "last": 16242.35,
+   "change_pct": -0.58
+  },
+  {
+   "sector": "Infrastructure",
+   "last": 9369.45,
+   "change_pct": -0.64
   },
   {
    "sector": "Fmcg",
-   "last": 49270.7,
-   "change_pct": -0.16
+   "last": 48832.5,
+   "change_pct": -0.97
+  },
+  {
+   "sector": "Metal",
+   "last": 12561.8,
+   "change_pct": -1.0
+  },
+  {
+   "sector": "Realty",
+   "last": 927.15,
+   "change_pct": -1.22
   }
  ],
- "strategy_name": "Adaptive: calm tape (VIX 12.41) \u2014 premiums cheap, momentum longs viable; large opening gap (+0.81%) \u2014 watch for a gap-fade trap in the first 30 minutes"
+ "strategy_name": "Adaptive: calm tape (VIX 13.32) \u2014 premiums cheap, momentum longs viable; PCR 1.57 at an extreme \u2014 positioning crowded, demand extra confirmation"
 }
