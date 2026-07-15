@@ -1,42 +1,43 @@
 {
  "market_outlook": {
-  "sentiment": "bearish",
-  "recommendation": "CAUTION",
-  "confidence": 60,
-  "bullish_prob": 30,
-  "bearish_prob": 50,
-  "rangebound_prob": 20,
-  "why": "NIFTY and BANKNIFTY show dominant call writing and negative FII flow, suggesting overhead resistance. However, VIX is calm, and premiums are cheap, allowing for momentum plays if strong signals emerge."
+  "sentiment": "bullish",
+  "recommendation": "GO",
+  "confidence": 80,
+  "bullish_prob": 70,
+  "bearish_prob": 15,
+  "rangebound_prob": 15,
+  "why": "NIFTY and BANKNIFTY show dominant put writing, indicating strong support and bullish sentiment. Despite FII selling, DII buying is robust, and VIX is calm, favoring momentum longs."
  },
- "overnight_summary": "No specific US/Europe/Asia/GIFT/crude/USDINR data provided, but headlines indicate a general market decline and rupee weakening against the USD due to oil price surges and US-Iran tensions. SK Hynix slide suggests unraveling AI trade.",
- "domestic_summary": "Yesterday saw broad market decline with 0 advancing and 2 declining F&O stocks. FIIs were net sellers (-\u20b93062.27 cr) while DIIs were net buyers (+\u20b92171.7 cr). India VIX is calm at 13.74, indicating low volatility expectations.",
+ "overnight_summary": "Global cues are mixed with escalating US-Iran tensions, however, the Indian market saw a strong rally yesterday. No specific US/Europe/Asia/GIFT/crude/USDINR data provided for a detailed overnight read.",
+ "domestic_summary": "Yesterday saw a strong bullish close with broad market participation (55 advancing / 22 declining). DIIs were significant buyers (+\u20b92927.71 cr) offsetting FII selling (-\u20b9739.69 cr). India VIX is calm at 13.09, suggesting low volatility and cheap premiums.",
  "sector_outlook": {
   "bullish_sectors": [
-   "Metal",
-   "Pharma",
-   "Healthcare Index"
+   "Psu Bank",
+   "Financial Services",
+   "Private Bank"
   ],
   "bearish_sectors": [
-   "Realty",
-   "Psu Bank",
-   "Auto"
+   "Metal",
+   "It",
+   "Fmcg"
   ],
-  "comment": "Metal, Pharma, and Healthcare showed strength yesterday, potentially indicating defensive rotation. Financials and Auto sectors were notably weak, suggesting continued pressure."
+  "comment": "Financials, particularly PSU and Private Banks, showed strong performance, indicating potential continued leadership. IT and Metal sectors lagged and may continue to face headwinds."
  },
  "nifty_levels": {
   "supports": [
-   24000,
-   24050,
-   23900
+   24200,
+   24100,
+   24000
   ],
   "resistances": [
-   24100,
    24200,
-   24150
+   24500,
+   25000
   ]
  },
  "banknifty_levels": {
   "supports": [
+   58000,
    57000,
    55000
   ],
@@ -46,141 +47,205 @@
    60000
   ]
  },
- "call_opportunities": [],
- "put_opportunities": [
+ "call_opportunities": [
   {
-   "symbol": "SIEMENS",
-   "current_price": 3446.1,
-   "bias": "bearish",
-   "confidence_score": 88,
+   "symbol": "LUPIN",
+   "current_price": 2501.3,
+   "bias": "bullish",
+   "confidence_score": 86,
    "score_breakdown": {
     "technical": "38/40",
-    "options": "15/20",
-    "volume": "5/10",
+    "options": "18/20",
+    "volume": "7/10",
     "news": "5/10",
-    "fundamentals": "20/20",
+    "fundamentals": "18/20",
     "risk_deduction": 0
    },
-   "technical_summary": "SIEMENS is in a clear downtrend with price below EMAs, bearish MACD, Supertrend down, and broke previous day's low.",
-   "fundamental_summary": "High PE (72.5) and negative earnings growth (-36.4%) suggest fundamental weakness.",
-   "news_summary": "No specific news for Siemens, but broader market decline is a negative backdrop.",
-   "entry_zone": "3440-3450",
-   "stop_loss": 3500.0,
-   "target_1": 3398.1,
-   "target_2": 3300.0,
-   "risk_reward": "1:1.9",
-   "option_type": "PUT",
-   "suggested_strike": "3400 PE",
+   "technical_summary": "Strong uptrend with price above key EMAs, high RSI, bullish MACD, and Supertrend 'up', nearing 52-week high with strong ADX.",
+   "fundamental_summary": "Strong ROE and earnings growth, decent PE, institutional holding at 34.73%.",
+   "news_summary": "no specific news",
+   "entry_zone": "2500-2510",
+   "stop_loss": 2475.0,
+   "target_1": 2526.9,
+   "target_2": 2550.0,
+   "risk_reward": "1:1.5",
+   "option_type": "CALL",
+   "suggested_strike": "2500 CE",
    "suggested_expiry": "28-Jul-2026",
    "scalping_suitability": "high",
    "expected_holding_time": "15-60 min",
    "key_risks": [
-    "Low rvol (0.23) suggests lower liquidity",
-    "Put writing dominant in options chain (bullish support) contradicts bearish technicals"
+    "Low RVOL",
+    "Resistance at 2526.9"
    ],
-   "why_selected": "Strong bearish technical alignment with price below key EMAs and Supertrend down. Broke previous low, indicating continuation of downtrend."
+   "why_selected": "LUPIN exhibits strong technicals in a clear uptrend, supported by bullish options data (put writing). High delivery percentage indicates conviction, making it suitable for momentum scalping."
+  },
+  {
+   "symbol": "ICICIBANK",
+   "current_price": 1427.1,
+   "bias": "bullish",
+   "confidence_score": 85,
+   "score_breakdown": {
+    "technical": "36/40",
+    "options": "18/20",
+    "volume": "6/10",
+    "news": "5/10",
+    "fundamentals": "20/20",
+    "risk_deduction": 0
+   },
+   "technical_summary": "Price above EMAs, strong RSI, Supertrend 'up', high ADX, broke previous high, nearing 52-week high.",
+   "fundamental_summary": "Excellent PE, ROE, and institutional holding, strong revenue and earnings growth.",
+   "news_summary": "no specific news",
+   "entry_zone": "1427-1430",
+   "stop_loss": 1415.0,
+   "target_1": 1433.0,
+   "target_2": 1450.0,
+   "risk_reward": "1:1.5",
+   "option_type": "CALL",
+   "suggested_strike": "1430 CE",
+   "suggested_expiry": "28-Jul-2026",
+   "scalping_suitability": "high",
+   "expected_holding_time": "15-60 min",
+   "key_risks": [
+    "MACD bearish divergence",
+    "Low RVOL"
+   ],
+   "why_selected": "ICICIBANK shows strong bullish momentum, breaking previous highs and supported by robust put writing. Excellent fundamentals and high institutional holding add conviction for a momentum play."
+  },
+  {
+   "symbol": "APOLLOHOSP",
+   "current_price": 8976.0,
+   "bias": "bullish",
+   "confidence_score": 85,
+   "score_breakdown": {
+    "technical": "37/40",
+    "options": "15/20",
+    "volume": "7/10",
+    "news": "5/10",
+    "fundamentals": "21/20",
+    "risk_deduction": 0
+   },
+   "technical_summary": "Strong uptrend, price above EMAs, bullish MACD, Supertrend 'up', high ADX, near 52-week high, broke previous high.",
+   "fundamental_summary": "Strong ROE and earnings growth, high institutional holding.",
+   "news_summary": "no specific news",
+   "entry_zone": "8975-8985",
+   "stop_loss": 8900.0,
+   "target_1": 9000.0,
+   "target_2": 9100.0,
+   "risk_reward": "1:1.5",
+   "option_type": "CALL",
+   "suggested_strike": "9000 CE",
+   "suggested_expiry": "28-Jul-2026",
+   "scalping_suitability": "high",
+   "expected_holding_time": "15-60 min",
+   "key_risks": [
+    "RSI 70.1 (overbought)",
+    "No clear resistance levels above"
+   ],
+   "why_selected": "APOLLOHOSP is in a strong uptrend, breaking new highs with good technicals and fundamentals. While options are balanced, the overall strength makes it a high-conviction momentum long."
   }
  ],
+ "put_opportunities": [],
  "alerts": [
-  "NIFTY and BANKNIFTY expiry is 14-Jul-2026 and 28-Jul-2026 respectively (monthly expiry).",
-  "FIIs are net sellers, indicating potential for continued market pressure.",
-  "Rupee falling below 96 against USD and surging oil prices are macro risks."
+  "Global geopolitical tensions (US-Iran) could introduce volatility.",
+  "NIFTY and BANKNIFTY expiry on 21-Jul-2026 and 28-Jul-2026 respectively.",
+  "Tata Elxsi Q1 results caused a significant drop, indicating potential for earnings-related volatility in other stocks."
  ],
  "risk_assessment": [
-  "Dominant call writing on both NIFTY and BANKNIFTY suggests strong overhead resistance and a bearish bias for indices.",
-  "Negative market breadth (0 adv / 2 dec) indicates weak underlying sentiment.",
-  "FII selling is a significant negative flow for the market.",
-  "Contradictory options data for individual stocks (put writing dominant for bearish SIEMENS) needs careful monitoring."
+  "Despite calm VIX, geopolitical headlines can cause sudden spikes in volatility.",
+  "FII selling is a persistent risk, though currently offset by DII buying.",
+  "Some bullish candidates show call writing dominance in their options chain, which could cap upside.",
+  "Low RVOL in some candidates suggests less institutional interest for intraday moves."
  ],
  "trading_plan": {
-  "style": "Scalping",
-  "why": "Calm VIX and cheap premiums support scalping. Focus on high-conviction, momentum-driven setups with tight risk management due to mixed market signals."
+  "style": "Momentum | Scalping",
+  "why": "The calm VIX and strong DII buying support momentum longs. Focus on high-conviction bullish setups with clear technical trends and supportive options data for quick scalps or short-term momentum trades."
  },
  "no_trade": false,
  "no_trade_reason": "",
- "generated_date": "2026-07-14",
- "generated_at": "14 Jul 2026 10:43 AM IST",
+ "generated_date": "2026-07-15",
+ "generated_at": "15 Jul 2026 10:44 AM IST",
  "sectors_raw": [
   {
-   "sector": "Metal",
-   "last": 12741.85,
-   "change_pct": 1.11
-  },
-  {
-   "sector": "Pharma",
-   "last": 25849.4,
-   "change_pct": 0.8
-  },
-  {
-   "sector": "Healthcare Index",
-   "last": 16420.5,
-   "change_pct": 0.76
-  },
-  {
-   "sector": "Media",
-   "last": 1518.0,
-   "change_pct": 0.18
-  },
-  {
-   "sector": "Fmcg",
-   "last": 48802.65,
-   "change_pct": -0.01
-  },
-  {
-   "sector": "It",
-   "last": 28988.35,
-   "change_pct": -0.09
-  },
-  {
-   "sector": "Energy",
-   "last": 39140.1,
-   "change_pct": -0.2
-  },
-  {
-   "sector": "Infrastructure",
-   "last": 9352.05,
-   "change_pct": -0.31
-  },
-  {
-   "sector": "Oil & Gas",
-   "last": 11127.45,
-   "change_pct": -0.44
-  },
-  {
-   "sector": "Consumer Durables",
-   "last": 38429.45,
-   "change_pct": -0.57
-  },
-  {
-   "sector": "Private Bank",
-   "last": 27837.7,
-   "change_pct": -1.12
-  },
-  {
-   "sector": "Bank",
-   "last": 57449.85,
-   "change_pct": -1.17
+   "sector": "Psu Bank",
+   "last": 8418.0,
+   "change_pct": 1.33
   },
   {
    "sector": "Financial Services",
-   "last": 26510.15,
-   "change_pct": -1.21
+   "last": 26870.9,
+   "change_pct": 1.26
+  },
+  {
+   "sector": "Private Bank",
+   "last": 28223.15,
+   "change_pct": 1.1
+  },
+  {
+   "sector": "Bank",
+   "last": 58072.3,
+   "change_pct": 1.06
+  },
+  {
+   "sector": "Oil & Gas",
+   "last": 11200.7,
+   "change_pct": 0.89
+  },
+  {
+   "sector": "Healthcare Index",
+   "last": 16556.85,
+   "change_pct": 0.7
   },
   {
    "sector": "Auto",
-   "last": 26569.0,
-   "change_pct": -1.53
+   "last": 26713.9,
+   "change_pct": 0.63
   },
   {
-   "sector": "Psu Bank",
-   "last": 8327.45,
-   "change_pct": -1.57
+   "sector": "Pharma",
+   "last": 26058.3,
+   "change_pct": 0.58
+  },
+  {
+   "sector": "Consumer Durables",
+   "last": 38879.65,
+   "change_pct": 0.58
+  },
+  {
+   "sector": "Infrastructure",
+   "last": 9399.4,
+   "change_pct": 0.52
+  },
+  {
+   "sector": "Energy",
+   "last": 39394.65,
+   "change_pct": 0.49
   },
   {
    "sector": "Realty",
-   "last": 920.15,
-   "change_pct": -1.81
+   "last": 922.1,
+   "change_pct": 0.38
+  },
+  {
+   "sector": "Media",
+   "last": 1512.05,
+   "change_pct": 0.1
+  },
+  {
+   "sector": "Fmcg",
+   "last": 48561.3,
+   "change_pct": 0.07
+  },
+  {
+   "sector": "Metal",
+   "last": 12654.2,
+   "change_pct": -0.19
+  },
+  {
+   "sector": "It",
+   "last": 28611.8,
+   "change_pct": -0.39
   }
  ],
- "strategy_name": "Adaptive: calm tape (VIX 13.74) \u2014 premiums cheap, momentum longs viable"
+ "strategy_name": "Adaptive: calm tape (VIX 13.09) \u2014 premiums cheap, momentum longs viable"
 }
