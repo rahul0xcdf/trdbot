@@ -1,317 +1,154 @@
 {
  "market_outlook": {
-  "sentiment": "bullish",
+  "sentiment": "mixed",
   "recommendation": "CAUTION",
-  "confidence": 70,
-  "bullish_prob": 60,
-  "bearish_prob": 20,
+  "confidence": 60,
+  "bullish_prob": 40,
+  "bearish_prob": 40,
   "rangebound_prob": 20,
-  "why": "NIFTY shows strong bullish support with dominant put writing and a large opening gap, but an extreme PCR suggests crowded positioning. BANKNIFTY is more neutral. The overall market breadth is positive, but FII selling is a concern."
+  "why": "The market breadth shows more advancers than decliners, suggesting underlying strength, but global headlines indicate significant geopolitical risks (US-Iran war jitters) which could lead to volatility. The absence of VIX and FII/DII data makes a strong directional conviction difficult."
  },
- "overnight_summary": "No specific US/Europe/Asia/GIFT/crude/USDINR data provided, but Nifty bucked an Asia selloff, indicating relative strength. The large opening gap (+0.77%) suggests a strong start.",
- "domestic_summary": "Yesterday saw Nifty closing strong, with positive market breadth (40 advancers / 27 decliners). FIIs were net sellers (-\u20b94205.56 cr) while DIIs were net buyers (+\u20b92986.41 cr). India VIX is calm at 13.22, indicating cheap premiums.",
+ "overnight_summary": "Global markets are likely influenced by US-Iran war jitters, leading to a stock market crash in India (Sensex down 700 points). Specific US/Europe/Asia/GIFT/crude/USDINR data is unavailable, making a comprehensive overnight read difficult.",
+ "domestic_summary": "Yesterday saw a significant market decline with Sensex crashing 700 points. Market breadth was positive with 45 advancing against 28 declining stocks, indicating some underlying resilience despite the overall fall. FII/DII and India VIX data are unavailable.",
  "sector_outlook": {
-  "bullish_sectors": [
-   "Private Bank",
-   "Realty",
-   "It"
-  ],
+  "bullish_sectors": [],
   "bearish_sectors": [
-   "Healthcare Index",
-   "Pharma",
-   "Media"
+   "Defence",
+   "Banking"
   ],
-  "comment": "Financials and Realty sectors showed strong performance yesterday, suggesting potential continued momentum. Healthcare and Pharma sectors faced significant selling pressure."
+  "comment": "Defence stocks dipped due to US-Iran war escalation, while some banking stocks show bearish technicals. No clear sector-wide bullish trend is evident from the provided data."
  },
  "nifty_levels": {
-  "supports": [
-   24200,
-   24100,
-   24000
-  ],
-  "resistances": [
-   24300,
-   24500,
-   25000
-  ]
+  "supports": [],
+  "resistances": []
  },
  "banknifty_levels": {
-  "supports": [
-   58000,
-   57000,
-   55000
-  ],
-  "resistances": [
-   58500,
-   59000,
-   60000
-  ]
+  "supports": [],
+  "resistances": []
  },
  "call_opportunities": [
   {
-   "symbol": "BAJFINANCE",
-   "current_price": 1054.1,
+   "symbol": "ICICIBANK",
+   "current_price": 1455.3,
    "bias": "bullish",
    "confidence_score": 88,
    "score_breakdown": {
     "technical": "38/40",
-    "options": "18/20",
-    "volume": "5/10",
-    "news": "10/10",
-    "fundamentals": "17/20",
+    "options": "0/20",
+    "volume": "0/10",
+    "news": "0/10",
+    "fundamentals": "10/20",
     "risk_deduction": 0
    },
-   "technical_summary": "Strong uptrend with price above key EMAs, bullish RSI and MACD, and near 52-week high.",
-   "fundamental_summary": "Strong revenue and earnings growth, healthy ROE, and institutional holding.",
-   "news_summary": "No specific news, but financial sector is strong.",
-   "entry_zone": "1050-1055",
-   "stop_loss": 1035.0,
-   "target_1": 1070.0,
-   "target_2": 1085.0,
-   "risk_reward": "1:2.0",
+   "technical_summary": "Strong uptrend with price above key EMAs, bullish MACD, Supertrend up, and high ADX, breaking previous high and near 52-week high.",
+   "fundamental_summary": "Healthy PE, ROE, revenue, and earnings growth with strong institutional holding.",
+   "news_summary": "no specific news",
+   "entry_zone": "1455-1460",
+   "stop_loss": 1430.0,
+   "target_1": 1480.0,
+   "target_2": 1500.0,
+   "risk_reward": "1:1.8",
    "option_type": "CALL",
-   "suggested_strike": "1050 CE",
-   "suggested_expiry": "28-Jul-2026",
-   "scalping_suitability": "high",
+   "suggested_strike": "1460 CE",
+   "suggested_expiry": "nearest weekly expiry",
+   "scalping_suitability": "medium",
    "expected_holding_time": "15-60 min",
    "key_risks": [
-    "Below average RVOL",
-    "High debt-to-equity"
+    "No options chain data for confirmation",
+    "No volume confirmation",
+    "Market sentiment is mixed"
    ],
-   "why_selected": "Strong technical setup with bullish options chain confirmation (put writing). Price is near 52w high, indicating breakout potential."
+   "why_selected": "ICICIBANK exhibits strong bullish technicals, breaking out to new highs with good momentum. The stock is fundamentally sound, making it a potential candidate for continued upward movement."
   },
   {
-   "symbol": "INDUSINDBK",
-   "current_price": 1024.1,
+   "symbol": "TITAN",
+   "current_price": 4648.0,
    "bias": "bullish",
-   "confidence_score": 86,
+   "confidence_score": 85,
    "score_breakdown": {
     "technical": "37/40",
-    "options": "18/20",
-    "volume": "3/10",
-    "news": "10/10",
-    "fundamentals": "18/20",
+    "options": "0/20",
+    "volume": "0/10",
+    "news": "0/10",
+    "fundamentals": "8/20",
     "risk_deduction": 0
    },
-   "technical_summary": "Clear uptrend, price above EMAs, bullish RSI and MACD, and near 52-week high.",
-   "fundamental_summary": "Exceptional revenue growth and high institutional holding, though ROE is low.",
-   "news_summary": "No specific news, but Private Bank sector is strongest.",
-   "entry_zone": "1020-1025",
-   "stop_loss": 1005.0,
-   "target_1": 1038.0,
-   "target_2": 1050.0,
-   "risk_reward": "1:1.5",
+   "technical_summary": "Clear uptrend, price above EMAs, bullish MACD, Supertrend up, trending ADX, and breaking previous high near 52-week high.",
+   "fundamental_summary": "High PE but strong ROE, revenue, and earnings growth.",
+   "news_summary": "no specific news",
+   "entry_zone": "4645-4650",
+   "stop_loss": 4600.0,
+   "target_1": 4680.0,
+   "target_2": 4720.0,
+   "risk_reward": "1:1.6",
    "option_type": "CALL",
-   "suggested_strike": "1020 CE",
-   "suggested_expiry": "28-Jul-2026",
-   "scalping_suitability": "high",
+   "suggested_strike": "4650 CE",
+   "suggested_expiry": "nearest weekly expiry",
+   "scalping_suitability": "medium",
    "expected_holding_time": "15-60 min",
    "key_risks": [
-    "Below average RVOL",
-    "Low ROE"
+    "No options chain data for confirmation",
+    "No volume confirmation",
+    "Market sentiment is mixed"
    ],
-   "why_selected": "Excellent technicals with strong bullish options data. Part of the strongest performing sector, indicating sector tailwinds."
+   "why_selected": "TITAN shows robust bullish technicals, trading near its 52-week high with strong trend indicators. Its breakout potential makes it an attractive candidate for scalping if market conditions support."
   }
  ],
  "put_opportunities": [
   {
-   "symbol": "JINDALSTEL",
-   "current_price": 1026.1,
+   "symbol": "AXISBANK",
+   "current_price": 1259.7,
    "bias": "bearish",
    "confidence_score": 85,
    "score_breakdown": {
-    "technical": "35/40",
-    "options": "18/20",
-    "volume": "2/10",
-    "news": "10/10",
-    "fundamentals": "20/20",
+    "technical": "38/40",
+    "options": "0/20",
+    "volume": "0/10",
+    "news": "0/10",
+    "fundamentals": "7/20",
     "risk_deduction": 0
    },
-   "technical_summary": "Clear downtrend with price below EMAs, bearish Supertrend, and near 52-week low.",
-   "fundamental_summary": "Strong revenue growth but low ROE and high debt-to-equity.",
-   "news_summary": "No specific news.",
-   "entry_zone": "1025-1030",
-   "stop_loss": 1040.0,
-   "target_1": 1010.0,
-   "target_2": 995.0,
+   "technical_summary": "Strong downtrend with price below EMAs, bearish MACD, Supertrend down, and breaking previous low, near 52-week low.",
+   "fundamental_summary": "Decent PE, ROE, revenue, and earnings growth, but high institutional holding.",
+   "news_summary": "no specific news",
+   "entry_zone": "1255-1260",
+   "stop_loss": 1280.0,
+   "target_1": 1230.0,
+   "target_2": 1200.0,
    "risk_reward": "1:1.5",
    "option_type": "PUT",
-   "suggested_strike": "1030 PE",
-   "suggested_expiry": "28-Jul-2026",
-   "scalping_suitability": "high",
+   "suggested_strike": "1250 PE",
+   "suggested_expiry": "nearest weekly expiry",
+   "scalping_suitability": "medium",
    "expected_holding_time": "15-60 min",
    "key_risks": [
-    "Below average RVOL",
-    "MACD bullish divergence"
+    "No options chain data for confirmation",
+    "No volume confirmation",
+    "Market sentiment is mixed"
    ],
-   "why_selected": "Strong bearish technicals confirmed by dominant call writing. Price is near 52-week low, indicating breakdown potential."
-  },
-  {
-   "symbol": "ITC",
-   "current_price": 280.2,
-   "bias": "bearish",
-   "confidence_score": 85,
-   "score_breakdown": {
-    "technical": "35/40",
-    "options": "18/20",
-    "volume": "3/10",
-    "news": "10/10",
-    "fundamentals": "19/20",
-    "risk_deduction": 0
-   },
-   "technical_summary": "Downtrend with price below EMAs, bearish RSI and MACD, and near 52-week low.",
-   "fundamental_summary": "Strong ROE and low debt-to-equity, but negative revenue and earnings growth.",
-   "news_summary": "No specific news.",
-   "entry_zone": "280-281",
-   "stop_loss": 285.0,
-   "target_1": 275.0,
-   "target_2": 270.0,
-   "risk_reward": "1:1.5",
-   "option_type": "PUT",
-   "suggested_strike": "280 PE",
-   "suggested_expiry": "28-Jul-2026",
-   "scalping_suitability": "high",
-   "expected_holding_time": "15-60 min",
-   "key_risks": [
-    "Below average RVOL",
-    "Low ATR"
-   ],
-   "why_selected": "Clear bearish technical structure with strong call writing. Price is near 52-week low, suggesting further downside."
-  },
-  {
-   "symbol": "NTPC",
-   "current_price": 343.2,
-   "bias": "bearish",
-   "confidence_score": 85,
-   "score_breakdown": {
-    "technical": "35/40",
-    "options": "18/20",
-    "volume": "2/10",
-    "news": "10/10",
-    "fundamentals": "20/20",
-    "risk_deduction": 0
-   },
-   "technical_summary": "Downtrend with price below EMAs, bearish RSI and MACD, and near 52-week low.",
-   "fundamental_summary": "Healthy ROE and institutional holding, but negative earnings growth.",
-   "news_summary": "No specific news.",
-   "entry_zone": "343-344",
-   "stop_loss": 348.0,
-   "target_1": 340.0,
-   "target_2": 335.0,
-   "risk_reward": "1:1.5",
-   "option_type": "PUT",
-   "suggested_strike": "342.5 PE",
-   "suggested_expiry": "28-Jul-2026",
-   "scalping_suitability": "high",
-   "expected_holding_time": "15-60 min",
-   "key_risks": [
-    "Below average RVOL",
-    "Low ATR"
-   ],
-   "why_selected": "Strong bearish technicals with dominant call writing. Price is near 52-week low, indicating potential breakdown."
+   "why_selected": "AXISBANK is in a clear downtrend, breaking recent lows with strong bearish technicals. The stock's negative momentum makes it a strong candidate for a short-side scalping opportunity."
   }
  ],
  "alerts": [
-  "NIFTY PCR at an extreme (1.54) suggests crowded positioning, watch for reversals.",
-  "Large opening gap (+0.77%) in NIFTY, be cautious of gap-fade traps in the first 30 minutes.",
-  "FIIs were net sellers, which could cap upside momentum.",
-  "Earnings announcements for RIL, JSW Steel, Federal Bank, Tata Technologies today - potential volatility in these stocks."
+  "Global geopolitical tensions (US-Iran war jitters) are a significant macro risk.",
+  "Absence of India VIX data means volatility expectations are based on defaults.",
+  "Absence of FII/DII data limits insight into institutional flow.",
+  "No NIFTY or BANKNIFTY options chain data available for index-specific levels or sentiment."
  ],
  "risk_assessment": [
-  "Extreme NIFTY PCR indicates potential for a sharp reversal if bullish sentiment wanes.",
-  "FII selling could put pressure on the broader market despite DII buying.",
-  "Low RVOL for several candidates suggests lower institutional participation, increasing risk of whipsaws.",
-  "Gap-fade trap risk in the initial trading hour for NIFTY."
+  "Geopolitical risks are high, potentially leading to increased market volatility and sudden reversals.",
+  "Lack of VIX and FII/DII data reduces visibility into market sentiment and institutional activity.",
+  "No options chain data for NIFTY/BANKNIFTY or individual stocks means options-specific confirmation is missing.",
+  "The market experienced a significant crash yesterday, indicating underlying weakness despite positive breadth."
  ],
  "trading_plan": {
   "style": "Scalping",
-  "why": "Calm VIX offers cheap premiums suitable for scalping. Focus on high-conviction setups with clear technical and options confirmation, especially in the first 30 minutes for gap-fade opportunities."
+  "why": "Given the mixed market sentiment, geopolitical risks, and lack of comprehensive data, a scalping approach with tight stop-losses is preferred to capitalize on short-term movements while minimizing exposure."
  },
  "no_trade": false,
  "no_trade_reason": "",
- "generated_date": "2026-07-17",
- "generated_at": "17 Jul 2026 10:57 AM IST",
- "sectors_raw": [
-  {
-   "sector": "Private Bank",
-   "last": 28271.95,
-   "change_pct": 1.28
-  },
-  {
-   "sector": "Realty",
-   "last": 917.05,
-   "change_pct": 1.2
-  },
-  {
-   "sector": "It",
-   "last": 29015.35,
-   "change_pct": 1.02
-  },
-  {
-   "sector": "Financial Services",
-   "last": 26808.15,
-   "change_pct": 0.95
-  },
-  {
-   "sector": "Bank",
-   "last": 58104.15,
-   "change_pct": 0.91
-  },
-  {
-   "sector": "Auto",
-   "last": 26971.75,
-   "change_pct": 0.76
-  },
-  {
-   "sector": "Oil & Gas",
-   "last": 11242.75,
-   "change_pct": 0.49
-  },
-  {
-   "sector": "Fmcg",
-   "last": 48579.0,
-   "change_pct": 0.35
-  },
-  {
-   "sector": "Psu Bank",
-   "last": 8374.85,
-   "change_pct": 0.32
-  },
-  {
-   "sector": "Infrastructure",
-   "last": 9354.2,
-   "change_pct": 0.25
-  },
-  {
-   "sector": "Energy",
-   "last": 39385.5,
-   "change_pct": 0.1
-  },
-  {
-   "sector": "Consumer Durables",
-   "last": 39409.65,
-   "change_pct": -0.26
-  },
-  {
-   "sector": "Metal",
-   "last": 12455.75,
-   "change_pct": -0.32
-  },
-  {
-   "sector": "Media",
-   "last": 1512.85,
-   "change_pct": -0.56
-  },
-  {
-   "sector": "Healthcare Index",
-   "last": 16293.55,
-   "change_pct": -1.21
-  },
-  {
-   "sector": "Pharma",
-   "last": 25648.85,
-   "change_pct": -1.38
-  }
- ],
- "strategy_name": "Adaptive: calm tape (VIX 13.22) \u2014 premiums cheap, momentum longs viable; PCR 1.54 at an extreme \u2014 positioning crowded, demand extra confirmation; large opening gap (+0.77%) \u2014 watch for a gap-fade trap in the first 30 minutes"
+ "generated_date": "2026-07-20",
+ "generated_at": "20 Jul 2026 11:27 AM IST",
+ "sectors_raw": [],
+ "strategy_name": "Adaptive: VIX unavailable, using defaults"
 }
