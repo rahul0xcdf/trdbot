@@ -1,36 +1,36 @@
 {
  "market_outlook": {
-  "sentiment": "mixed",
+  "sentiment": "neutral",
   "recommendation": "CAUTION",
   "confidence": 60,
   "bullish_prob": 45,
-  "bearish_prob": 35,
-  "rangebound_prob": 20,
-  "why": "NIFTY shows balanced OI and positive FII/DII flows, suggesting underlying strength. However, BANKNIFTY's dominant call writing and yesterday's underperformance in banking/financials, coupled with some overbought bullish candidates, indicate potential headwinds and a cautious approach is warranted."
+  "bearish_prob": 40,
+  "rangebound_prob": 15,
+  "why": "NIFTY shows a balanced OI signal, while BANKNIFTY indicates bearish call writing. Global cues are mixed, and FIIs have returned, but DIIs are selling, suggesting caution is warranted despite low VIX."
  },
- "overnight_summary": "No specific US/Europe/Asia/GIFT/crude/USDINR data provided, so global cues are unknown. Samsung's strong Q2 results suggest robust tech demand, potentially supporting IT stocks. Bitcoin price rise after US Fed rate hold indicates a risk-on sentiment in crypto, but its impact on equities is indirect.",
- "domestic_summary": "Yesterday saw a mixed session with IT, Auto, and Oil & Gas leading, while Banking and Financial Services lagged. Market breadth was positive (42 adv / 33 dec). FIIs were net buyers (\u20b92981.87 cr) and DIIs also bought (\u20b9998.02 cr), providing a positive flow. India VIX is calm at 12.15, indicating cheap premiums suitable for momentum plays.",
+ "overnight_summary": "Global equity heatmap is mixed, with no specific US/Europe/Asia performance details provided, but a stronger dollar and US-Iran conflict are noted. Crude and GIFT Nifty data are not available in the provided context.",
+ "domestic_summary": "Yesterday saw a mixed market with 40 advancing and 37 declining F&O stocks. FIIs were net buyers (\u20b93623.51 cr) while DIIs were net sellers (\u20b9-1864.03 cr). India VIX is low at 11.83, indicating cheap premiums and potential for momentum plays.",
  "sector_outlook": {
   "bullish_sectors": [
-   "It",
    "Auto",
-   "Oil & Gas"
+   "Financial Services",
+   "Realty"
   ],
   "bearish_sectors": [
-   "Realty",
-   "Financial Services",
+   "Fmcg",
+   "It",
    "Private Bank"
   ],
-  "comment": "IT and Auto sectors showed strong momentum yesterday and are likely to continue, while banking and financial services remain under pressure, suggesting a rotation out of financials into growth sectors."
+  "comment": "Auto, Financial Services, and Realty showed strong performance yesterday, indicating potential continued momentum. IT and FMCG sectors lagged significantly, suggesting weakness."
  },
  "nifty_levels": {
   "supports": [
-   24200,
+   24300,
    24000
   ],
   "resistances": [
-   24300,
-   25000
+   24400,
+   24500
   ]
  },
  "banknifty_levels": {
@@ -39,178 +39,274 @@
    56000
   ],
   "resistances": [
-   57500,
-   58000
+   58000,
+   60000
   ]
  },
  "call_opportunities": [
   {
-   "symbol": "NESTLEIND",
-   "current_price": 1523.2,
+   "symbol": "BAJFINANCE",
+   "current_price": 1126.5,
    "bias": "bullish",
-   "confidence_score": 88,
+   "confidence_score": 90,
    "score_breakdown": {
     "technical": "38/40",
-    "options": "18/20",
-    "volume": "5/10",
-    "news": "0/10",
-    "fundamentals": "17/20",
+    "options": "15/20",
+    "volume": "10/10",
+    "news": "8/10",
+    "fundamentals": "19/20",
     "risk_deduction": 0
    },
-   "technical_summary": "Strong uptrend with price above key EMAs, bullish MACD, and Supertrend 'up'. RSI is in bullish momentum zone, and it broke its previous high.",
-   "fundamental_summary": "Strong revenue and earnings growth, decent institutional holding, but high PE and debt-to-equity.",
-   "news_summary": "no specific news",
-   "entry_zone": "1520-1525",
-   "stop_loss": 1505.0,
-   "target_1": 1540.0,
-   "target_2": 1555.0,
-   "risk_reward": "1:2.3",
+   "technical_summary": "Strong uptrend with price above key EMAs, bullish MACD, Supertrend 'up', and high ADX, breaking previous high.",
+   "fundamental_summary": "Strong revenue and earnings growth, decent ROE, and institutional holding.",
+   "news_summary": "Bajaj Finance share price jumps around 7% to record high on strong Q1 results FY27.",
+   "entry_zone": "1120-1130",
+   "stop_loss": 1101.3,
+   "target_1": 1145.0,
+   "target_2": 1160.0,
+   "risk_reward": "1:1.5",
    "option_type": "CALL",
-   "suggested_strike": "1520 CE",
+   "suggested_strike": "1130 CE",
    "suggested_expiry": "25-Aug-2026",
    "scalping_suitability": "high",
    "expected_holding_time": "15-60 min",
    "key_risks": [
-    "Low RVOL (0.53) indicates lower intraday liquidity",
-    "High PE ratio"
+    "Potential profit booking after strong rally",
+    "High debt-to-equity ratio"
    ],
-   "why_selected": "Strong technical setup with clear bullish momentum and price action. Options chain shows put writing dominance, providing good support for upside."
+   "why_selected": "Exceptional technical strength with a breakout and strong Q1 results. High delivery percentage and balanced options chain confirm institutional interest and potential for further upside."
   },
   {
    "symbol": "SUNPHARMA",
-   "current_price": 2002.7,
+   "current_price": 2013.9,
    "bias": "bullish",
-   "confidence_score": 86,
+   "confidence_score": 88,
    "score_breakdown": {
     "technical": "37/40",
     "options": "18/20",
     "volume": "2/10",
-    "news": "0/10",
+    "news": "8/10",
     "fundamentals": "19/20",
     "risk_deduction": 0
    },
-   "technical_summary": "Robust uptrend, price above EMAs, bullish MACD, and Supertrend 'up'. ADX indicates strong trend, and it broke its previous high.",
-   "fundamental_summary": "Healthy revenue and earnings growth, strong institutional holding, and reasonable PE.",
-   "news_summary": "no specific news",
-   "entry_zone": "2000-2005",
-   "stop_loss": 1985.0,
-   "target_1": 2020.0,
-   "target_2": 2040.0,
-   "risk_reward": "1:2.3",
+   "technical_summary": "Clear uptrend with price above EMAs, bullish MACD, Supertrend 'up', and high ADX, breaking previous high.",
+   "fundamental_summary": "Good revenue and earnings growth with healthy ROE and institutional holding.",
+   "news_summary": "Sun Pharma among companies to declare Q1 earnings today.",
+   "entry_zone": "2010-2020",
+   "stop_loss": 1943.0,
+   "target_1": 2035.0,
+   "target_2": 2050.0,
+   "risk_reward": "1:1.5",
    "option_type": "CALL",
-   "suggested_strike": "2000 CE",
+   "suggested_strike": "2020 CE",
    "suggested_expiry": "25-Aug-2026",
-   "scalping_suitability": "high",
+   "scalping_suitability": "medium",
    "expected_holding_time": "15-60 min",
    "key_risks": [
-    "Very low RVOL (0.22) suggests low intraday liquidity",
-    "RSI at 71.0 is approaching overbought territory"
+    "Low relative volume (RVOL)",
+    "Q1 earnings today (event risk)"
    ],
-   "why_selected": "Excellent technical strength with strong trend confirmation. Options data shows put writing dominance, reinforcing bullish sentiment and potential for further upside."
+   "why_selected": "Strong technical setup with a clear uptrend and bullish options signal (put writing dominant). Q1 earnings today could be a catalyst for further upside if positive."
+  },
+  {
+   "symbol": "TVSMOTOR",
+   "current_price": 4282.5,
+   "bias": "bullish",
+   "confidence_score": 85,
+   "score_breakdown": {
+    "technical": "35/40",
+    "options": "18/20",
+    "volume": "9/10",
+    "news": "5/10",
+    "fundamentals": "19/20",
+    "risk_deduction": -6
+   },
+   "technical_summary": "Strong uptrend with price above EMAs, bullish MACD, Supertrend 'up', and trending ADX, breaking previous high.",
+   "fundamental_summary": "Excellent revenue and earnings growth, high institutional holding.",
+   "news_summary": "No specific news.",
+   "entry_zone": "4270-4290",
+   "stop_loss": 4150.0,
+   "target_1": 4350.0,
+   "target_2": 4400.0,
+   "risk_reward": "1:1.5",
+   "option_type": "CALL",
+   "suggested_strike": "4300 CE",
+   "suggested_expiry": "25-Aug-2026",
+   "scalping_suitability": "medium",
+   "expected_holding_time": "15-60 min",
+   "key_risks": [
+    "RSI 80.2 (overbought)",
+    "High debt-to-equity ratio"
+   ],
+   "why_selected": "Robust technical uptrend with strong momentum and positive options chain (put writing). High delivery percentage indicates strong buying interest, but RSI is overbought."
   }
  ],
- "put_opportunities": [],
+ "put_opportunities": [
+  {
+   "symbol": "HDFCBANK",
+   "current_price": 750.3,
+   "bias": "bearish",
+   "confidence_score": 85,
+   "score_breakdown": {
+    "technical": "35/40",
+    "options": "18/20",
+    "volume": "3/10",
+    "news": "5/10",
+    "fundamentals": "19/20",
+    "risk_deduction": 0
+   },
+   "technical_summary": "Clear downtrend with price below key EMAs, bearish MACD, Supertrend 'down', and trending ADX.",
+   "fundamental_summary": "Solid revenue and earnings growth, very high institutional holding.",
+   "news_summary": "No specific news.",
+   "entry_zone": "745-750",
+   "stop_loss": 769.18,
+   "target_1": 734.85,
+   "target_2": 720.0,
+   "risk_reward": "1:1.5",
+   "option_type": "PUT",
+   "suggested_strike": "750 PE",
+   "suggested_expiry": "25-Aug-2026",
+   "scalping_suitability": "medium",
+   "expected_holding_time": "15-60 min",
+   "key_risks": [
+    "Low relative volume (RVOL)",
+    "Strong institutional holding"
+   ],
+   "why_selected": "Strong bearish technical setup with price below all key EMAs and bearish MACD. Dominant call writing in the options chain confirms overhead resistance, suggesting further downside."
+  },
+  {
+   "symbol": "ITC",
+   "current_price": 281.2,
+   "bias": "bearish",
+   "confidence_score": 85,
+   "score_breakdown": {
+    "technical": "35/40",
+    "options": "18/20",
+    "volume": "3/10",
+    "news": "8/10",
+    "fundamentals": "15/20",
+    "risk_deduction": 0
+   },
+   "technical_summary": "Downtrend with price below key EMAs, Supertrend 'down', and closed below previous day's low, near 52w low.",
+   "fundamental_summary": "Negative revenue and earnings growth, decent ROE.",
+   "news_summary": "ITC Q1 results preview: Analysts see a weak quarter; cigarette tax hikes likely to dent profit, margins.",
+   "entry_zone": "280-282",
+   "stop_loss": 283.46,
+   "target_1": 279.39,
+   "target_2": 275.0,
+   "risk_reward": "1:1.5",
+   "option_type": "PUT",
+   "suggested_strike": "280 PE",
+   "suggested_expiry": "25-Aug-2026",
+   "scalping_suitability": "medium",
+   "expected_holding_time": "15-60 min",
+   "key_risks": [
+    "Low relative volume (RVOL)",
+    "Q1 earnings today (event risk)"
+   ],
+   "why_selected": "Bearish technicals with price near 52-week low and negative news sentiment regarding Q1 results. Dominant call writing further strengthens the bearish outlook."
+  }
+ ],
  "alerts": [
-  "NIFTY and BANKNIFTY August expiry is still distant (25-Aug-2026), reducing immediate expiry-related volatility.",
-  "DIVISLAB, TVSMOTOR, TITAN, HCLTECH, TECHM are showing RSI overbought conditions (above 70), indicating potential for profit booking or reversal.",
-  "HDFCLIFE and IRCTC are trading near 52-week lows, increasing breakdown risk.",
-  "BANKNIFTY shows dominant call writing, suggesting overhead resistance and potential for bearish moves."
+  "Sun Pharma, ITC, Maruti Suzuki to declare Q1 earnings today (31-Jul-2026).",
+  "NIFTY and BANKNIFTY expiry is far (Aug 2026), but individual stock expiries are also Aug 2026.",
+  "Global market sentiment is mixed with US-Iran conflict noted."
  ],
  "risk_assessment": [
-  "VIX is low (12.15), leading to cheap premiums, but also means less room for error in scalping due to lower volatility.",
-  "BANKNIFTY's bearish OI signal contradicts NIFTY's balanced view, indicating potential index divergence.",
-  "Several bullish candidates are in overbought RSI territory, increasing reversal risk.",
-  "Low RVOL for some candidates (NESTLEIND, SUNPHARMA, TITAN) implies lower intraday liquidity, potentially affecting entry/exit prices."
+  "India VIX is low (11.83), indicating cheap premiums but also potential for sudden volatility spikes.",
+  "BANKNIFTY shows dominant call writing, suggesting bearish sentiment in the banking sector.",
+  "Several bullish candidates (DIVISLAB, TVSMOTOR, TITAN) are in overbought RSI territory (above 78), increasing reversal risk.",
+  "Low relative volume (RVOL) for some candidates (SUNPHARMA, HDFCBANK, ITC) might indicate lack of strong institutional participation on the current move."
  ],
  "trading_plan": {
   "style": "Scalping",
-  "why": "Calm VIX and cheap premiums favor momentum scalping. Focus on high-conviction setups with strong technicals and options confirmation, managing risk tightly."
+  "why": "The calm VIX and cheap premiums support momentum scalping. Focus on high signal strength setups with clear technical and options confirmation, managing risk tightly."
  },
  "no_trade": false,
  "no_trade_reason": "",
- "generated_date": "2026-07-30",
- "generated_at": "30 Jul 2026 10:53 AM IST",
+ "generated_date": "2026-07-31",
+ "generated_at": "31 Jul 2026 11:20 AM IST",
  "sectors_raw": [
   {
-   "sector": "It",
-   "last": 31665.85,
-   "change_pct": 1.74
-  },
-  {
    "sector": "Auto",
-   "last": 28065.35,
-   "change_pct": 0.86
-  },
-  {
-   "sector": "Oil & Gas",
-   "last": 11147.1,
-   "change_pct": 0.64
-  },
-  {
-   "sector": "Energy",
-   "last": 38250.55,
-   "change_pct": 0.18
-  },
-  {
-   "sector": "Pharma",
-   "last": 26416.9,
-   "change_pct": 0.17
-  },
-  {
-   "sector": "Healthcare Index",
-   "last": 16722.3,
-   "change_pct": 0.16
-  },
-  {
-   "sector": "Consumer Durables",
-   "last": 40178.15,
-   "change_pct": 0.15
-  },
-  {
-   "sector": "Fmcg",
-   "last": 49723.85,
-   "change_pct": 0.07
-  },
-  {
-   "sector": "Infrastructure",
-   "last": 9322.6,
-   "change_pct": 0.07
-  },
-  {
-   "sector": "Media",
-   "last": 1580.0,
-   "change_pct": -0.05
-  },
-  {
-   "sector": "Metal",
-   "last": 12678.5,
-   "change_pct": -0.07
-  },
-  {
-   "sector": "Psu Bank",
-   "last": 8294.5,
-   "change_pct": -0.27
-  },
-  {
-   "sector": "Bank",
-   "last": 56897.35,
-   "change_pct": -0.54
-  },
-  {
-   "sector": "Private Bank",
-   "last": 27408.4,
-   "change_pct": -0.56
+   "last": 28749.6,
+   "change_pct": 1.66
   },
   {
    "sector": "Financial Services",
-   "last": 26132.9,
-   "change_pct": -0.59
+   "last": 26494.75,
+   "change_pct": 0.93
   },
   {
    "sector": "Realty",
-   "last": 906.3,
-   "change_pct": -1.32
+   "last": 907.75,
+   "change_pct": 0.92
+  },
+  {
+   "sector": "Media",
+   "last": 1597.0,
+   "change_pct": 0.73
+  },
+  {
+   "sector": "Pharma",
+   "last": 26519.35,
+   "change_pct": 0.66
+  },
+  {
+   "sector": "Energy",
+   "last": 38558.9,
+   "change_pct": 0.64
+  },
+  {
+   "sector": "Healthcare Index",
+   "last": 16781.8,
+   "change_pct": 0.49
+  },
+  {
+   "sector": "Infrastructure",
+   "last": 9383.0,
+   "change_pct": 0.41
+  },
+  {
+   "sector": "Oil & Gas",
+   "last": 11168.4,
+   "change_pct": 0.37
+  },
+  {
+   "sector": "Consumer Durables",
+   "last": 40396.4,
+   "change_pct": 0.36
+  },
+  {
+   "sector": "Metal",
+   "last": 12743.45,
+   "change_pct": 0.33
+  },
+  {
+   "sector": "Psu Bank",
+   "last": 8348.6,
+   "change_pct": 0.25
+  },
+  {
+   "sector": "Bank",
+   "last": 57193.45,
+   "change_pct": 0.08
+  },
+  {
+   "sector": "Private Bank",
+   "last": 27504.75,
+   "change_pct": -0.04
+  },
+  {
+   "sector": "Fmcg",
+   "last": 49173.5,
+   "change_pct": -0.94
+  },
+  {
+   "sector": "It",
+   "last": 30674.75,
+   "change_pct": -1.67
   }
  ],
- "strategy_name": "Adaptive: calm tape (VIX 12.15) \u2014 premiums cheap, momentum longs viable"
+ "strategy_name": "Adaptive: calm tape (VIX 11.83) \u2014 premiums cheap, momentum longs viable"
 }
