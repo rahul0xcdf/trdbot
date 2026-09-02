@@ -1,21 +1,14 @@
 name: Telegram Command Listener
 
-# Long-polls Telegram getUpdates so slash commands get answered live from
-# 6:00 AM to 11:30 PM IST (quiet hours overnight). bot.py computes each
-# window's length so it never runs past the 11:30 PM cutoff.
+# Long-polls Telegram getUpdates so slash commands get answered live.
 #
-# GitHub caps a job at 6 h, so continuous coverage = a relay: each run holds
-# up to ~5h45m, while starter crons fire every 30 min as the next runner in
-# line (they QUEUE behind the active window and take over the moment it
-# exits — handoff gap is ~1 min of job setup). GitHub cron is unreliable
-# (2026-07-09: one fire skipped, another 3.5 h late), which is exactly why
-# the starters are this frequent: any single one that runs covers hours.
+# MANUAL ONLY — there is no cron here on purpose. This used to relay 5h45m
+# runs back to back from 6 AM to 11:30 PM IST, which kept a runner busy almost
+# all day; GitHub then deprioritised this repo's scheduled workflows, and the
+# market reports in market-bot.yml started arriving hours late or not at all.
+# Run it from the Actions tab ("Run workflow") when you actually want to use
+# the slash commands, and give it a window in minutes.
 on:
-  schedule:
-    # Every 30 min during 6:05 AM–11:05 PM IST (00:35–17:35 UTC), every day.
-    - cron: "5,35 1-17 * * *"
-    - cron: "35 0 * * *"
-
   workflow_dispatch:
     inputs:
       minutes:
@@ -23,11 +16,9 @@ on:
         required: false
         default: "15"
 
-# Exactly one listener may poll at a time (two would steal each other's
-# updates). cancel-in-progress is OFF on purpose: backups QUEUE behind the
-# active listener instead of killing it. When the active one exits at market
-# close, the queued backup starts, sees the market is closed, and exits in
-# seconds (bot.py computes the remaining window).
+# Exactly one listener may poll at a time — two would steal each other's
+# updates. A second dispatch queues behind the running one rather than
+# killing it.
 concurrency:
   group: telegram-listener
   cancel-in-progress: false
@@ -60,8 +51,8 @@ jobs:
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
           GNEWS_API_KEY:      ${{ secrets.GNEWS_API_KEY }}
           RUN_TYPE: listen
-          # Scheduled runs leave this empty → bot.py listens until 15:35 IST.
-          # Manual dispatch passes an explicit test window.
+          # Manual dispatch always passes a window (default 15 min); left
+          # empty, bot.py would listen until 11:30 PM IST.
           LISTEN_MINUTES: ${{ github.event.inputs.minutes || '' }}
           # No STRATEGY here — the listener resolves data/config.json
           # (/setstrategy) → ACTIVE_STRATEGY_VAR → adaptive, live per command.

@@ -19,3 +19,6 @@ data/*.csv
 # OS
 .DS_Store
 Thumbs.db
+
+# Actions writes a marker file for the per-slot cache key
+.slot-marker

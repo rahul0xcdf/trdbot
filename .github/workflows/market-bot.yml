@@ -1,21 +1,24 @@
 name: Market Intelligence Bot
 
+# ── Why this ticks instead of using one cron per report ───────────────────────
+# GitHub's cron is best-effort, and on this repo it has been badly so: fires
+# land 20–80 min late and whole mornings get dropped (2026-09-02: nothing fired
+# between 02:33 and 07:14 UTC, so the 8:15 AM pre-market report went out at
+# 12:44 PM IST). Scheduling each report on its own cron cannot survive that.
+#
+# So: one cron ticks every 15 min and modules/schedule.py says what is due.
+#   • fired early → the job sleeps until the exact IST target time
+#   • fired late  → it still sends, while inside that slot's grace window
+#   • past the grace → nothing is sent (a "mid-morning" note at 4 PM is worse
+#     than no note), and the next tick picks up the next slot
+# A cache marker per slot+day stops a burst of delayed ticks re-sending a slot.
 on:
-  # ── Scheduled runs (all cron in UTC; comments show IST) — Mon–Fri ──────────
-  # GitHub cron is best-effort and usually fires 5–30 min LATE, worst at
-  # congested minutes (:00/:30). So each job is scheduled ~10 min before its
-  # target IST time, on uncongested minutes, to land near the target.
   schedule:
-    - cron: "33 2 * * 1-5"      # target 8:15 AM IST  → premarket
-    - cron: "52 3 * * 1-5"      # target 9:30 AM IST  → opening
-    - cron: "23 5 * * 1-5"      # target 11:00 AM IST → midmorning
-    - cron: "53 6 * * 1-5"      # target 12:30 PM IST → european_open
-    - cron: "53 7 * * 1-5"      # target 1:30 PM IST  → london_us
-    - cron: "9 9 * * 1-5"       # target 2:45 PM IST  → exit_reminder
-    - cron: "23 10 * * 1-5"     # target 4:00 PM IST  → eod
-    - cron: "11,41 4-10 * * 1-5" # ~every 30 min market hours → vix_check
+    # Every 15 min, 02:02–11:47 UTC (07:32–17:17 IST), Mon–Fri. Off the top of
+    # the hour on purpose — that is when GitHub's scheduler is most congested.
+    - cron: "2,17,32,47 2-11 * * 1-5"
 
-  # ── Manual trigger (for testing any flow on demand) ────────────────────────
+  # ── Manual trigger (runs the chosen flow immediately, no schedule gate) ─────
   workflow_dispatch:
     inputs:
       run_type:
@@ -51,12 +54,53 @@ on:
         default: "gemini-2.5-flash"
         type: string
 
+# Ticks run one at a time: when GitHub delivers several delayed fires at once,
+# each waits for the one ahead of it and so sees an up-to-date "already sent"
+# marker instead of double-posting.
+concurrency:
+  group: market-bot
+  cancel-in-progress: false
+
 jobs:
-  run-bot:
+  # Cheap gate (~20 s, no dependencies) — most ticks stop here.
+  decide:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    outputs:
+      due:          ${{ steps.gate.outputs.due }}
+      run_type:     ${{ steps.gate.outputs.run_type }}
+      target_epoch: ${{ steps.gate.outputs.target_epoch }}
+      marker:       ${{ steps.gate.outputs.marker }}
+      already_sent: ${{ steps.sent.outputs.cache-hit }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: What is due right now?
+        id: gate
+        env:
+          RUN_TYPE_INPUT: ${{ github.event.inputs.run_type }}
+        run: python3 -m modules.schedule
+
+      - name: Has this slot already gone out?
+        id: sent
+        if: steps.gate.outputs.due == 'true' && steps.gate.outputs.marker != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: .slot-marker
+          key: sent-${{ steps.gate.outputs.marker }}
+          lookup-only: true
+
+  run-bot:
+    needs: decide
+    if: needs.decide.outputs.due == 'true' && needs.decide.outputs.already_sent != 'true'
+    runs-on: ubuntu-latest
+    # Room for the wait-for-target sleep (≤18 min) plus the flow itself.
+    timeout-minutes: 35
     permissions:
       contents: write   # premarket/eod commit data/ back for persistence
+    env:
+      RUN_TYPE: ${{ needs.decide.outputs.run_type }}
 
     steps:
       - name: Checkout
@@ -71,28 +115,6 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # ── Map the firing cron → RUN_TYPE (or use the manual input) ───────────
-      #    github.event.schedule holds the exact cron string that fired.
-      - name: Resolve RUN_TYPE
-        run: |
-          if [ -n "${{ github.event.inputs.run_type }}" ]; then
-            RUN_TYPE="${{ github.event.inputs.run_type }}"
-          else
-            case "${{ github.event.schedule }}" in
-              "33 2 * * 1-5")        RUN_TYPE=premarket ;;
-              "52 3 * * 1-5")        RUN_TYPE=opening ;;
-              "23 5 * * 1-5")        RUN_TYPE=midmorning ;;
-              "53 6 * * 1-5")        RUN_TYPE=european_open ;;
-              "53 7 * * 1-5")        RUN_TYPE=london_us ;;
-              "9 9 * * 1-5")         RUN_TYPE=exit_reminder ;;
-              "23 10 * * 1-5")       RUN_TYPE=eod ;;
-              "11,41 4-10 * * 1-5")  RUN_TYPE=vix_check ;;
-              *)                     RUN_TYPE=premarket ;;
-            esac
-          fi
-          echo "RUN_TYPE=$RUN_TYPE" >> "$GITHUB_ENV"
-          echo "Resolved RUN_TYPE=$RUN_TYPE"
-
       - name: Run Market Bot
         env:
           PYTHONUNBUFFERED: "1"   # stream log lines live instead of at exit
@@ -101,6 +123,9 @@ jobs:
           TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
           GNEWS_API_KEY:       ${{ secrets.GNEWS_API_KEY }}
           RUN_TYPE:            ${{ env.RUN_TYPE }}
+          # The IST moment this message is for — bot.py sleeps out any head
+          # start so an early runner does not send early. Empty on manual runs.
+          RUN_AT_EPOCH:        ${{ needs.decide.outputs.target_epoch }}
           # Precedence lives in modules/config.py: explicit STRATEGY input →
           # data/config.json (/setstrategy) → ACTIVE_STRATEGY_VAR → adaptive.
           # "configured" is not a real strategy, so it falls through to config.
@@ -113,6 +138,19 @@ jobs:
               'gemini-2.5-flash'
             }}
         run: python bot.py
+
+      # ── Remember this slot went out, so later delayed ticks skip it ─────────
+      - name: Write the sent marker
+        if: success() && needs.decide.outputs.marker != ''
+        run: date -u +%FT%TZ > .slot-marker
+
+      - name: Save the sent marker
+        if: success() && needs.decide.outputs.marker != ''
+        continue-on-error: true   # a racing tick may have saved it already
+        uses: actions/cache/save@v4
+        with:
+          path: .slot-marker
+          key: sent-${{ needs.decide.outputs.marker }}
 
       # ── Persist generated data back to the repo ─────────────────────────────
       #    The runner is ephemeral: without this, the premarket report cache

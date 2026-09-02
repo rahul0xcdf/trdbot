@@ -1,9 +1,11 @@
 """
 Market Intelligence Bot — orchestrator.
 
-Runs on GitHub Actions. A RUN_TYPE env var (set per cron schedule) selects
-which intraday flow to run. Each flow fetches ONLY what it needs so we don't,
-say, scrape the option chain at the EOD run.
+Runs on GitHub Actions. A RUN_TYPE env var selects which intraday flow to
+run; on scheduled runs the workflow gets it from modules/schedule.py, which
+also hands us RUN_AT_EPOCH — the IST moment this message is meant to land, so
+a runner that started early waits instead of sending early. Each flow fetches
+ONLY what it needs so we don't, say, scrape the option chain at the EOD run.
 
   RUN_TYPE:
     premarket      → 8:15 AM IST  — gap, VIX, PCR/max pain, stocks to watch
@@ -14,8 +16,9 @@ say, scrape the option chain at the EOD run.
     exit_reminder  → 2:45 PM IST  — light: square-off nudge
     eod            → 4:00 PM IST  — FII/DII + OI for tomorrow
     vix_check      → every 30 min — SILENT unless VIX > 18 or |change| > 10%
-    listen         → market hours — answers Telegram slash commands
-                     (long-polls getUpdates for LISTEN_MINUTES minutes)
+    listen         → manual only — answers Telegram slash commands for
+                     LISTEN_MINUTES minutes (long-polls getUpdates). No
+                     longer on a schedule: see telegram-listener.yml.
 
 Modules do the real work; this file just wires them together.
 """
@@ -24,7 +27,7 @@ import os
 import sys
 
 from modules import (nse_data, market_data, news, ai_engine, telegram, signals,
-                     commands, premarket, config)
+                     commands, premarket, config, schedule)
 from modules.market_data import WATCHLIST_INDIA, WATCHLIST_STOCKS_TO_SCAN
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -349,6 +352,16 @@ FLOWS = {
 def main():
     name, source = config.resolve_strategy_name(VALID_STRATEGIES)
     print(f"\n=== Market Bot — RUN_TYPE={RUN_TYPE} | Strategy={name} (from {source}) ===\n")
+
+    # GitHub often starts the runner a few minutes before the slot it is for.
+    # Sleep out the difference so the message lands at its IST target time.
+    run_at = os.environ.get("RUN_AT_EPOCH", "").strip()
+    if run_at:
+        try:
+            schedule.wait_until(float(run_at))
+        except ValueError:
+            print(f"[WARN] ignoring bad RUN_AT_EPOCH={run_at!r}")
+
     flow = FLOWS.get(RUN_TYPE)
     if flow is None:
         print(f"[ERROR] Unknown RUN_TYPE '{RUN_TYPE}'. Valid: {', '.join(FLOWS)}")
