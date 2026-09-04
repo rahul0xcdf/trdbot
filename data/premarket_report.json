@@ -1,319 +1,220 @@
 {
  "market_outlook": {
-  "sentiment": "bearish",
-  "recommendation": "CAUTION",
-  "confidence": 65,
-  "bullish_prob": 30,
-  "bearish_prob": 55,
+  "sentiment": "bullish",
+  "recommendation": "GO",
+  "confidence": 75,
+  "bullish_prob": 65,
+  "bearish_prob": 20,
   "rangebound_prob": 15,
-  "why": "NIFTY's dominant call writing and extreme PCR of 0.67, combined with a large opening gap down, suggest a bearish bias. However, the VIX is low, indicating cheap premiums, and BANKNIFTY's balanced OI suggests some resilience, warranting caution rather than an outright 'GO'."
+  "why": "NIFTY and BANKNIFTY show dominant put writing, indicating strong bullish support. India VIX is low, suggesting a calm tape and cheap premiums, favorable for momentum longs. DII buying significantly outweighs FII selling."
  },
- "overnight_summary": "No specific global market data (US/Europe/Asia/GIFT/crude/USDINR) was provided for an overnight read. The large opening gap (-0.80%) for Indian markets suggests a negative global or domestic trigger, but the specific cause is unknown from the provided data.",
- "domestic_summary": "Yesterday saw broad-based declines with 54 of 67 F&O stocks falling, and FIIs were net buyers while DIIs were also net buyers. India VIX is low at 11.72, suggesting calm tape and cheap premiums, but NIFTY's PCR at 0.67 indicates crowded positioning and potential for a short squeeze or sharp reversal.",
+ "overnight_summary": "No specific global market data provided, but the low VIX suggests a calm environment. FIIs were net sellers while DIIs were strong buyers, indicating domestic support. Crude and USDINR data are not available.",
+ "domestic_summary": "Yesterday saw Financial Services and Private Banks leading, with overall market breadth positive (33 advancing / 25 declining). FIIs were net sellers (-\u20b92345.87 cr) but DIIs provided strong support (+\u20b94977.46 cr). India VIX is down 4.78% to 10.8, indicating low volatility and cheap premiums.",
  "sector_outlook": {
   "bullish_sectors": [
-   "Energy",
-   "Psu Bank",
+   "Financial Services",
+   "Private Bank",
    "Oil & Gas"
   ],
   "bearish_sectors": [
-   "Auto",
-   "It",
-   "Media"
+   "Consumer Durables",
+   "Healthcare Index",
+   "Auto"
   ],
-  "comment": "Yesterday's performance showed defensive sectors like Energy holding up, while Auto and IT were significantly weaker. This suggests a rotation towards defensive plays and away from growth-oriented sectors."
+  "comment": "Financials and Banking sectors showed strong performance yesterday and are likely to continue leading. Defensive sectors like Pharma and Consumer Durables showed weakness."
  },
  "nifty_levels": {
   "supports": [
-   23800,
-   23500,
-   23000
+   23900,
+   23950,
+   23800
   ],
   "resistances": [
-   23900,
    24000,
-   24100,
    24200,
-   25000
+   24100
   ]
  },
  "banknifty_levels": {
   "supports": [
-   57000,
-   55000,
-   56000
+   57500,
+   58000,
+   57000
   ],
   "resistances": [
    57500,
    58000,
-   59000,
    60000
   ]
  },
- "call_opportunities": [],
- "put_opportunities": [
+ "call_opportunities": [
   {
-   "symbol": "HINDUNILVR",
-   "current_price": 1970.0,
-   "bias": "bearish",
+   "symbol": "COFORGE",
+   "current_price": 1977.3,
+   "bias": "bullish",
    "confidence_score": 88,
    "score_breakdown": {
     "technical": "38/40",
-    "options": "15/20",
-    "volume": "5/10",
+    "options": "12/20",
+    "volume": "3/10",
     "news": "5/10",
-    "fundamentals": "15/20",
+    "fundamentals": "18/20",
     "risk_deduction": 0
    },
-   "technical_summary": "Strong downtrend with price below EMAs, RSI in oversold territory (34.8), MACD bearish, Supertrend down, and near 52-week low.",
-   "fundamental_summary": "Stable but slow growth, high PE for its growth, decent institutional holding.",
-   "news_summary": "No specific news.",
-   "entry_zone": "1965-1975",
-   "stop_loss": 2000.0,
-   "target_1": 1940.0,
-   "target_2": 1900.0,
-   "risk_reward": "1:1.6",
-   "option_type": "PUT",
-   "suggested_strike": "1950 PE",
+   "technical_summary": "Strong uptrend with price above key EMAs, high RSI, strong ADX, and near 52-week high, indicating breakout potential.",
+   "fundamental_summary": "Solid revenue and earnings growth with reasonable PE for growth, strong institutional holding.",
+   "news_summary": "No specific news, general positive market sentiment from low VIX.",
+   "entry_zone": "1975-1985",
+   "stop_loss": 1940.0,
+   "target_1": 2020.0,
+   "target_2": 2050.0,
+   "risk_reward": "1:1.5",
+   "option_type": "CALL",
+   "suggested_strike": "1980 CE",
    "suggested_expiry": "29-Sep-2026",
    "scalping_suitability": "high",
    "expected_holding_time": "15-60 min",
    "key_risks": [
-    "RSI nearing oversold levels could lead to bounce",
-    "Low rvol (0.66) suggests lack of institutional conviction"
+    "MACD bearish divergence",
+    "Low relative volume"
    ],
-   "why_selected": "HINDUNILVR exhibits a strong bearish technical setup, trading below key EMAs and near its 52-week low. Options chain shows dominant call writing, confirming bearish sentiment and potential for further downside."
+   "why_selected": "Strong technical setup with clear uptrend and breakout potential. Options chain shows balanced OI, suggesting less immediate resistance overhead."
   },
   {
-   "symbol": "TATACONSUM",
-   "current_price": 1016.3,
-   "bias": "bearish",
-   "confidence_score": 88,
+   "symbol": "DLF",
+   "current_price": 684.5,
+   "bias": "bullish",
+   "confidence_score": 85,
    "score_breakdown": {
-    "technical": "38/40",
-    "options": "15/20",
-    "volume": "5/10",
+    "technical": "35/40",
+    "options": "18/20",
+    "volume": "3/10",
     "news": "5/10",
-    "fundamentals": "15/20",
+    "fundamentals": "18/20",
     "risk_deduction": 0
    },
-   "technical_summary": "Clear downtrend with price below EMAs, RSI at 32.7, MACD bearish, Supertrend down, and near 52-week low.",
-   "fundamental_summary": "High PE for its growth, but decent revenue and earnings growth.",
-   "news_summary": "No specific news.",
-   "entry_zone": "1010-1020",
-   "stop_loss": 1040.0,
-   "target_1": 990.0,
-   "target_2": 970.0,
+   "technical_summary": "In an uptrend, price above EMAs, RSI in bullish zone, Supertrend up, and near 52-week high, indicating potential for further upside.",
+   "fundamental_summary": "Strong ROE and healthy PE, despite negative revenue growth, institutional holding is decent.",
+   "news_summary": "Puravankara share price surges, indicating positive sentiment in realty sector.",
+   "entry_zone": "680-685",
+   "stop_loss": 670.0,
+   "target_1": 691.0,
+   "target_2": 700.0,
    "risk_reward": "1:1.5",
-   "option_type": "PUT",
-   "suggested_strike": "1000 PE",
+   "option_type": "CALL",
+   "suggested_strike": "680 CE",
    "suggested_expiry": "29-Sep-2026",
    "scalping_suitability": "high",
    "expected_holding_time": "15-60 min",
    "key_risks": [
-    "RSI at 32.7 is oversold, potential for short covering",
-    "Low rvol (0.41) indicates low current interest"
+    "MACD bearish divergence",
+    "Low ADX suggests weak trend strength",
+    "Low relative volume"
    ],
-   "why_selected": "TATACONSUM shows a robust bearish technical structure, breaking below its previous low and trading in a clear downtrend. The options chain indicates call writing dominance, reinforcing the bearish outlook."
-  },
-  {
-   "symbol": "AMBUJACEM",
-   "current_price": 400.45,
-   "bias": "bearish",
-   "confidence_score": 88,
-   "score_breakdown": {
-    "technical": "38/40",
-    "options": "15/20",
-    "volume": "5/10",
-    "news": "5/10",
-    "fundamentals": "15/20",
-    "risk_deduction": 0
-   },
-   "technical_summary": "Strong downtrend with price below EMAs, RSI at 36.3, MACD bearish, Supertrend down, and near 52-week low.",
-   "fundamental_summary": "Negative revenue and earnings growth, but low debt.",
-   "news_summary": "No specific news.",
-   "entry_zone": "398-402",
-   "stop_loss": 415.0,
-   "target_1": 390.0,
-   "target_2": 380.0,
-   "risk_reward": "1:1.5",
-   "option_type": "PUT",
-   "suggested_strike": "400 PE",
-   "suggested_expiry": "29-Sep-2026",
-   "scalping_suitability": "high",
-   "expected_holding_time": "15-60 min",
-   "key_risks": [
-    "ADX (15.6) is low, indicating weak trend strength",
-    "Low rvol (0.3) suggests low current interest"
-   ],
-   "why_selected": "AMBUJACEM is in a clear downtrend, trading below all key EMAs and close to its 52-week low. The options data confirms bearish sentiment with dominant call writing, making it a strong put candidate."
-  },
-  {
-   "symbol": "IRCTC",
-   "current_price": 473.05,
-   "bias": "bearish",
-   "confidence_score": 88,
-   "score_breakdown": {
-    "technical": "38/40",
-    "options": "15/20",
-    "volume": "5/10",
-    "news": "5/10",
-    "fundamentals": "15/20",
-    "risk_deduction": 0
-   },
-   "technical_summary": "Strong downtrend with price below EMAs, RSI at 32.1, MACD bearish, Supertrend down, and near 52-week low.",
-   "fundamental_summary": "Mixed fundamentals with good revenue growth but flat earnings.",
-   "news_summary": "No specific news.",
-   "entry_zone": "470-475",
-   "stop_loss": 490.0,
-   "target_1": 460.0,
-   "target_2": 450.0,
-   "risk_reward": "1:1.5",
-   "option_type": "PUT",
-   "suggested_strike": "470 PE",
-   "suggested_expiry": "29-Sep-2026",
-   "scalping_suitability": "high",
-   "expected_holding_time": "15-60 min",
-   "key_risks": [
-    "RSI at 32.1 is oversold, potential for short covering",
-    "ADX (19.2) is low, indicating weak trend strength"
-   ],
-   "why_selected": "IRCTC is exhibiting a clear bearish trend, trading below its EMAs and near its 52-week low. The technical indicators are aligned for a downside move, supported by the overall market sentiment."
-  },
-  {
-   "symbol": "SBILIFE",
-   "current_price": 1729.1,
-   "bias": "bearish",
-   "confidence_score": 87,
-   "score_breakdown": {
-    "technical": "38/40",
-    "options": "15/20",
-    "volume": "5/10",
-    "news": "5/10",
-    "fundamentals": "14/20",
-    "risk_deduction": 0
-   },
-   "technical_summary": "Strong downtrend with price below EMAs, RSI at 30.5, MACD bearish, Supertrend down, and near 52-week low.",
-   "fundamental_summary": "Good revenue and earnings growth, but high PE.",
-   "news_summary": "No specific news.",
-   "entry_zone": "1725-1735",
-   "stop_loss": 1760.0,
-   "target_1": 1700.0,
-   "target_2": 1660.0,
-   "risk_reward": "1:1.5",
-   "option_type": "PUT",
-   "suggested_strike": "1720 PE",
-   "suggested_expiry": "29-Sep-2026",
-   "scalping_suitability": "high",
-   "expected_holding_time": "15-60 min",
-   "key_risks": [
-    "RSI at 30.5 is deeply oversold, high chance of bounce",
-    "Low rvol (0.47) suggests low current interest"
-   ],
-   "why_selected": "SBILIFE is in a well-defined downtrend, with price below key moving averages and RSI in oversold territory. The options chain shows dominant call writing, confirming bearish sentiment and potential for further decline."
+   "why_selected": "Strong technicals with bullish options signal (put writing dominant). Positive news flow in the realty sector provides additional tailwind."
   }
  ],
+ "put_opportunities": [],
  "alerts": [
-  "NIFTY PCR at 0.67 is at an extreme, indicating crowded positioning and potential for a sharp reversal or short squeeze.",
-  "Large opening gap (-0.80%) on NIFTY, watch for gap-fade traps in the first 30 minutes.",
-  "VIX is low (11.72), implying cheap premiums, which can be beneficial for momentum strategies but also suggests complacency.",
-  "All suggested opportunities are for the 29-Sep-2026 expiry, which is a monthly expiry."
+  "India VIX at 10.8 suggests low volatility, but can reverse quickly.",
+  "FII selling could cap upside, but DII buying is strong.",
+  "Expiry for NIFTY and BANKNIFTY is 29-Sep-2026, providing ample time for trades."
  ],
  "risk_assessment": [
-  "NIFTY's extreme PCR (0.67) suggests a crowded short market, increasing the risk of a sharp short-covering rally.",
-  "The large opening gap down could trigger initial volatility and potential gap-fade traps, requiring careful entry timing.",
-  "Low VIX implies cheap options, but also means less room for error if the market moves against the position.",
-  "Many bearish candidates have low RVOL, indicating less institutional participation and potentially weaker trend conviction."
+  "Low VIX implies cheap premiums, but also potential for sharp reversals if volatility picks up.",
+  "Some bullish candidates show bearish MACD divergence, indicating potential for short-term pullbacks.",
+  "FII selling is a persistent risk, though currently offset by DII buying.",
+  "Low relative volume for some candidates might indicate lack of strong conviction."
  ],
  "trading_plan": {
-  "style": "Scalping | Momentum",
-  "why": "Given the calm tape (low VIX) and cheap premiums, momentum scalping on high-conviction setups is viable. The large gap down and extreme PCR necessitate adaptive entry and strict risk management."
+  "style": "Momentum",
+  "why": "The calm tape and low VIX favor momentum longs. Focus on stocks with strong technical setups and bullish options chain confirmation, adapting to intraday price action."
  },
  "no_trade": false,
  "no_trade_reason": "",
- "generated_date": "2026-09-02",
- "generated_at": "02 Sep 2026 12:45 PM IST",
+ "generated_date": "2026-09-04",
+ "generated_at": "04 Sep 2026 12:51 PM IST",
  "sectors_raw": [
   {
-   "sector": "Energy",
-   "last": 37830.1,
-   "change_pct": 0.06
-  },
-  {
-   "sector": "Psu Bank",
-   "last": 8479.55,
-   "change_pct": -0.31
-  },
-  {
-   "sector": "Oil & Gas",
-   "last": 11106.4,
-   "change_pct": -0.32
-  },
-  {
-   "sector": "Infrastructure",
-   "last": 9175.3,
-   "change_pct": -0.37
-  },
-  {
-   "sector": "Pharma",
-   "last": 26691.85,
-   "change_pct": -0.38
-  },
-  {
-   "sector": "Fmcg",
-   "last": 46259.05,
-   "change_pct": -0.43
-  },
-  {
-   "sector": "Healthcare Index",
-   "last": 16582.85,
-   "change_pct": -0.52
-  },
-  {
-   "sector": "Bank",
-   "last": 57068.0,
-   "change_pct": -0.6
-  },
-  {
-   "sector": "Metal",
-   "last": 13108.5,
-   "change_pct": -0.62
+   "sector": "Financial Services",
+   "last": 26102.05,
+   "change_pct": 0.69
   },
   {
    "sector": "Private Bank",
-   "last": 27582.65,
-   "change_pct": -0.65
+   "last": 27883.25,
+   "change_pct": 0.49
   },
   {
-   "sector": "Financial Services",
-   "last": 25763.35,
-   "change_pct": -0.93
+   "sector": "Oil & Gas",
+   "last": 11218.55,
+   "change_pct": 0.48
   },
   {
-   "sector": "Realty",
-   "last": 881.45,
-   "change_pct": -1.11
+   "sector": "Bank",
+   "last": 57550.05,
+   "change_pct": 0.3
   },
   {
-   "sector": "Consumer Durables",
-   "last": 39373.4,
-   "change_pct": -1.23
+   "sector": "Psu Bank",
+   "last": 8574.8,
+   "change_pct": 0.26
   },
   {
-   "sector": "Media",
-   "last": 1541.95,
-   "change_pct": -1.25
+   "sector": "Infrastructure",
+   "last": 9223.8,
+   "change_pct": 0.21
+  },
+  {
+   "sector": "Metal",
+   "last": 13182.0,
+   "change_pct": 0.05
+  },
+  {
+   "sector": "Fmcg",
+   "last": 45975.45,
+   "change_pct": 0.04
   },
   {
    "sector": "It",
-   "last": 31027.1,
-   "change_pct": -1.49
+   "last": 30840.0,
+   "change_pct": 0.0
+  },
+  {
+   "sector": "Media",
+   "last": 1560.1,
+   "change_pct": -0.04
+  },
+  {
+   "sector": "Energy",
+   "last": 38102.7,
+   "change_pct": -0.1
+  },
+  {
+   "sector": "Realty",
+   "last": 912.9,
+   "change_pct": -0.35
+  },
+  {
+   "sector": "Pharma",
+   "last": 26559.15,
+   "change_pct": -0.37
   },
   {
    "sector": "Auto",
-   "last": 27657.7,
-   "change_pct": -2.92
+   "last": 27700.1,
+   "change_pct": -0.49
+  },
+  {
+   "sector": "Healthcare Index",
+   "last": 16466.75,
+   "change_pct": -0.52
+  },
+  {
+   "sector": "Consumer Durables",
+   "last": 39431.2,
+   "change_pct": -0.56
   }
  ],
- "strategy_name": "Adaptive: calm tape (VIX 11.72) \u2014 premiums cheap, momentum longs viable; PCR 0.67 at an extreme \u2014 positioning crowded, demand extra confirmation; large opening gap (-0.80%) \u2014 watch for a gap-fade trap in the first 30 minutes"
+ "strategy_name": "Adaptive: calm tape (VIX 10.8) \u2014 premiums cheap, momentum longs viable"
 }
