@@ -1,18 +1,16 @@
 name: Market Intelligence Bot
 
-on:
-  # ── Scheduled runs (all cron in UTC; comments show IST) — Mon–Fri ──────────
-  # GitHub cron is best-effort: this repo's runs have landed 2.5–7 HOURS
-  # late. bot.py skips any scheduled run that starts outside its window
-  # (premarket 6:30–9:15, afternoon 1:30–3:30, evening 5:30–9:30 PM), so a
-  # late run never sends a stale report. For on-time delivery, trigger the
-  # workflow_dispatch below from an outside scheduler instead.
-  schedule:
-    - cron: "33 2 * * 1-5"      # target 8:15 AM IST → premarket
-    - cron: "23 8 * * 1-5"      # target 2:00 PM IST → afternoon
-    - cron: "23 12 * * 1-5"     # target 6:00 PM IST → evening
+# Shows which report each run sent in the Actions list.
+run-name: "${{ inputs.run_type || 'premarket' }} (${{ inputs.trigger || 'manual' }})"
 
-  # ── Manual trigger (testing, or an outside scheduler hitting the API) ─────
+# ── When it runs ──────────────────────────────────────────────────────────────
+# Started ON THE MINUTE by the timer chain (chain.py + timer.yml, all inside
+# GitHub): each report books the next one, so they land at 8:15 AM, 2:00 PM
+# and 6:00 PM IST, Mon–Fri, on NSE trading days. watchdog.yml restarts the
+# chain if it ever breaks. There is deliberately NO `schedule:` block here —
+# GitHub's own cron started this bot 2.5–7 HOURS late.
+# Chain runs still skip weekends, holidays and anything outside 7 AM–7 PM.
+on:
   workflow_dispatch:
     inputs:
       run_type:
@@ -24,6 +22,19 @@ on:
           - premarket
           - afternoon
           - evening
+      trigger:
+        description: "Who started it (chain = the timer chain; leave on manual)"
+        required: false
+        default: "manual"
+        type: choice
+        options:
+          - manual
+          - chain
+      send_at:
+        description: "Chain only: exact send time (epoch seconds)"
+        required: false
+        default: ""
+        type: string
       model:
         description: "Gemini model"
         required: false
@@ -33,9 +44,10 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write   # evening commits data/signals.db back for history
+      actions: write    # chain runs book the next report (workflow_dispatch)
 
     steps:
       - name: Checkout
@@ -50,22 +62,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # ── Map the firing cron → RUN_TYPE (or use the manual input) ───────────
-      #    github.event.schedule holds the exact cron string that fired.
       - name: Resolve RUN_TYPE
         run: |
-          if [ -n "${{ github.event.inputs.run_type }}" ]; then
-            RUN_TYPE="${{ github.event.inputs.run_type }}"
-          else
-            case "${{ github.event.schedule }}" in
-              "33 2 * * 1-5")   RUN_TYPE=premarket ;;
-              "23 8 * * 1-5")   RUN_TYPE=afternoon ;;
-              "23 12 * * 1-5")  RUN_TYPE=evening ;;
-              *)                RUN_TYPE=premarket ;;
-            esac
-          fi
+          RUN_TYPE="${{ inputs.run_type || 'premarket' }}"
           echo "RUN_TYPE=$RUN_TYPE" >> "$GITHUB_ENV"
-          echo "Resolved RUN_TYPE=$RUN_TYPE"
+          echo "Resolved RUN_TYPE=$RUN_TYPE (trigger: ${{ inputs.trigger || 'manual' }})"
 
       - name: Run Market Bot
         env:
@@ -73,8 +74,13 @@ jobs:
           GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Friends' chat IDs, comma-separated (optional; reports only).
+          TELEGRAM_SHARE_CHAT_IDS: ${{ secrets.TELEGRAM_SHARE_CHAT_IDS }}
           GNEWS_API_KEY:       ${{ secrets.GNEWS_API_KEY }}
           RUN_TYPE:            ${{ env.RUN_TYPE }}
+          TRIGGER:             ${{ inputs.trigger || 'manual' }}
+          SEND_AT:             ${{ inputs.send_at }}
+          GITHUB_TOKEN:        ${{ secrets.GITHUB_TOKEN }}
           GEMINI_MODEL: >-
             ${{
               github.event.inputs.model ||
@@ -104,7 +110,9 @@ jobs:
       - name: Notify on failure
         if: failure()
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+          # -o /dev/null: Telegram's reply contains your name/username —
+          # keep it out of the (public) log.
+          curl -s -o /dev/null -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
             -d text="⚠️ Market Bot failed (RUN_TYPE=${{ env.RUN_TYPE }}). Check: ${{ github.server_url }}/${{ github.repository }}/actions" \
             -d parse_mode="HTML"

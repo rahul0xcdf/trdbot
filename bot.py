@@ -25,9 +25,20 @@ from modules.market_data import WATCHLIST_INDIA
 # ── Config ────────────────────────────────────────────────────────────────────
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]  # owner: reports + alerts
+
+# Friends who also get the three reports (comma-separated chat IDs, or a
+# channel like @mychannel). They never get skip/failure alerts.
+SHARE_CHAT_IDS = [c.strip() for c in
+                  os.environ.get("TELEGRAM_SHARE_CHAT_IDS", "").split(",") if c.strip()]
 
 RUN_TYPE = os.environ.get("RUN_TYPE", "premarket").strip()
+
+# "chain" = started by the timer chain (chain.py). Those runs get the
+# weekend / holiday / time-window checks, wait for SEND_AT (the exact target
+# minute, epoch seconds) before sending, and book the next report after.
+TRIGGER = os.environ.get("TRIGGER", "").strip().lower()
+SEND_AT = int(os.environ.get("SEND_AT", "").strip() or 0)
 
 # DRY_RUN=1 prints the report instead of sending it (local testing).
 DRY_RUN = os.environ.get("DRY_RUN", "").strip() == "1"
@@ -141,11 +152,23 @@ def _strategy(nse: dict | None = None) -> dict:
     return STRATEGIES.get(name, STRATEGIES["nifty_intraday"])
 
 
-def _send(message: str):
+def _send(message: str, share: bool = True):
+    """Send to the owner, and to every shared chat unless share=False."""
+    recipients = [TELEGRAM_CHAT_ID] + (SHARE_CHAT_IDS if share else [])
+    if share and SEND_AT:
+        import time
+        early = SEND_AT - time.time()
+        if 0 < early <= 600:  # built ahead of time — hold for the exact minute
+            print(f"[OK] _send: report ready, waiting {early:.0f}s for the target minute")
+            time.sleep(early)
     if DRY_RUN:
-        print("\n----- DRY RUN: message not sent -----\n" + message + "\n" + "-" * 38)
+        print(f"\n----- DRY RUN: not sent (would go to {len(recipients)} chat(s)) -----\n"
+              + message + "\n" + "-" * 38)
         return
-    telegram.send_telegram(message, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
+    for chat_id in dict.fromkeys(recipients):  # de-dupe, keep order
+        # send_telegram logs and swallows errors, so one friend who hasn't
+        # pressed Start (Telegram 403) never blocks anyone else.
+        telegram.send_telegram(message, TELEGRAM_BOT_TOKEN, chat_id)
 
 
 def _log_snapshot(data: dict):
@@ -214,17 +237,17 @@ FLOWS = {
 
 # ── Late-run guard ────────────────────────────────────────────────────────────
 #
-# GitHub's cron is best-effort and has fired this bot 2.5–7 HOURS late
-# (e.g. 2 Sep 2026: "premarket" ran at 12:44 PM, "eod" at 8:04 PM). A report
-# that lands at the wrong time is worse than none, so each scheduled flow
-# only runs inside its useful IST window (Mon–Fri). Outside it the job exits
-# cleanly without calling NSE, Gemini or Telegram. Manual "Run workflow"
-# dispatches and local runs are never blocked.
+# Reports are started on the minute by the timer chain (chain.py), because
+# GitHub's own cron fired this bot 2.5–7 HOURS late (2 Sep 2026: "premarket"
+# at 12:44 PM, "eod" at 8:04 PM).
+# As a safety net, chain runs still only send inside their IST window,
+# Mon–Fri, on NSE trading days — nothing ever goes out before 7 AM or after
+# 7 PM. Manual "Run workflow" clicks and local runs are never blocked.
 
 FLOW_WINDOWS = {  # RUN_TYPE: (earliest, latest) as (hour, minute) IST
-    "premarket": ((6, 30), (9, 15)),    # must land before the 9:15 open
+    "premarket": ((7, 0), (9, 15)),     # must land before the 9:15 open
     "afternoon": ((13, 30), (15, 30)),  # while the market is still open
-    "evening":   ((17, 30), (21, 30)),
+    "evening":   ((17, 30), (19, 0)),
 }
 
 
@@ -247,8 +270,9 @@ def _late_run_reason(run_type: str, now) -> str | None:
 
 def _skip_if_outside_window() -> bool:
     """True if this scheduled run is outside its window and should exit."""
-    if os.environ.get("GITHUB_EVENT_NAME") != "schedule":
-        return False  # manual dispatch / local run — always allowed
+    scheduled = os.environ.get("GITHUB_EVENT_NAME") == "schedule" or TRIGGER == "chain"
+    if not scheduled:
+        return False  # manual "Run workflow" / local run — always allowed
     from datetime import datetime
     from modules.telegram import IST
     now = datetime.now(IST)
@@ -262,12 +286,12 @@ def _skip_if_outside_window() -> bool:
         return False
     print(f"[SKIP] {RUN_TYPE} started {now:%I:%M %p} IST — {reason}. "
           "Not sending anything.")
-    # Say when a report is missing instead of staying silent — but never
-    # ping overnight if GitHub's delay pushed the job past 10 PM.
-    if reason != "weekend" and 6 <= now.hour < 22:
+    # Tell the owner (not friends) a report is missing instead of staying
+    # silent — but only between 7 AM and 7 PM.
+    if reason != "weekend" and 7 <= now.hour < 19:
         try:
-            _send(f"⚠️ {RUN_TYPE.title()} report skipped: GitHub started the job "
-                  f"at {now:%I:%M %p} IST, which is {reason}.")
+            _send(f"⚠️ {RUN_TYPE.title()} report skipped: the job started at "
+                  f"{now:%I:%M %p} IST, which is {reason}.", share=False)
         except Exception as e:
             print(f"[WARN] skip notice not sent: {e}")
     return True
@@ -280,9 +304,25 @@ def main():
     if flow is None:
         print(f"[ERROR] Unknown RUN_TYPE '{RUN_TYPE}'. Valid: {', '.join(FLOWS)}")
         sys.exit(1)
-    if _skip_if_outside_window():
-        return
-    flow()
+    failed = True
+    try:
+        if not _skip_if_outside_window():
+            flow()
+        failed = False
+    finally:
+        # Book the next report even if this one failed or was skipped, so
+        # one bad run never breaks the chain (the failure step still alerts).
+        if TRIGGER == "chain" and not DRY_RUN:
+            import chain
+            from datetime import datetime
+            from modules.telegram import IST
+            try:
+                chain.continue_after(datetime.fromtimestamp(SEND_AT, IST) if SEND_AT
+                                     else datetime.now(IST))
+            except Exception as e:
+                print(f"[ERROR] chain: could not book the next report: {e}")
+                if not failed:
+                    raise  # fail the job so you get the Telegram alert
     print("\n=== Done ===\n")
 
 

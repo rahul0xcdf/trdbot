@@ -1,0 +1,72 @@
+name: Report Timer
+
+# One hop of the timer chain (see chain.py). The job is held by its
+# environment's wait timer — "wait-480" queues it for 480 minutes WITHOUT a
+# runner — then it books the next shorter wait, or starts the report a few
+# minutes before its exact time. Started only by chain.py, never by hand.
+run-name: "⏳ ${{ inputs.run_type }} · ${{ inputs.label }} (${{ inputs.wait_env }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_type:
+        required: true
+        type: choice
+        options:
+          - premarket
+          - afternoon
+          - evening
+      target:
+        description: "Exact send time (epoch seconds)"
+        required: true
+        type: string
+      label:
+        description: "Human-readable target time"
+        required: false
+        type: string
+      wait_env:
+        description: "Environment whose wait timer holds this hop (wait-15 … wait-3840)"
+        required: true
+        type: string
+      booked_at:
+        description: "When this hop was booked (epoch seconds) — detects a missing timer"
+        required: true
+        type: string
+      hop:
+        required: false
+        default: "1"
+        type: string
+
+permissions:
+  actions: write    # book the next hop / the report
+  contents: read
+
+jobs:
+  hop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25     # the last hop may sleep up to ~18 min
+    environment: ${{ inputs.wait_env }}
+    steps:
+      - name: Checkout chain.py
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: chain.py
+          sparse-checkout-cone-mode: false
+
+      - name: Book the next step
+        env:
+          PYTHONUNBUFFERED: "1"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_TYPE: ${{ inputs.run_type }}
+          TARGET: ${{ inputs.target }}
+          WAIT_ENV: ${{ inputs.wait_env }}
+          BOOKED_AT: ${{ inputs.booked_at }}
+          HOP: ${{ inputs.hop }}
+        run: python3 chain.py hop
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          curl -s -o /dev/null -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="⚠️ Report timer failed (${{ inputs.run_type }}). The watchdog will retry within ~3 h. Check: ${{ github.server_url }}/${{ github.repository }}/actions"

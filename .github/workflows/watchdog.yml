@@ -1,0 +1,42 @@
+name: Report Chain Watchdog
+
+# Restarts the timer chain (chain.py) if nothing is queued, waiting or
+# running — e.g. after a GitHub outage, or the very first time. It runs on
+# GitHub's cron, which is often hours late; that's fine here because the
+# chain itself does the precise timing. Also: Run workflow → starts the chain.
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write    # start the chain
+  contents: read
+
+concurrency:
+  group: chain-watchdog
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25     # may sleep up to ~18 min if a slot is close
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt   # NSE holiday list
+
+      - name: Start the chain if it isn't running
+        env:
+          PYTHONUNBUFFERED: "1"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: unused   # modules import-time config
+        run: python chain.py watchdog
