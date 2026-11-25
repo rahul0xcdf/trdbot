@@ -14,8 +14,9 @@ on:
         type: choice
         options:
           - premarket
-          - afternoon
+          - midday
           - evening
+          - afternoon   # old name for midday
       target:
         description: "Exact send time (epoch seconds)"
         required: true

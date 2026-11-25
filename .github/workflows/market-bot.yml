@@ -5,8 +5,9 @@ run-name: "${{ inputs.run_type || 'premarket' }} (${{ inputs.trigger || 'manual'
 
 # ── When it runs ──────────────────────────────────────────────────────────────
 # Started ON THE MINUTE by the timer chain (chain.py + timer.yml, all inside
-# GitHub): each report books the next one, so they land at 8:15 AM, 2:00 PM
-# and 6:00 PM IST, Mon–Fri, on NSE trading days. watchdog.yml restarts the
+# GitHub): each report books the next one, so they land at 8:45 AM, 11:45 AM
+# and 6:00 PM IST, Mon–Fri, on NSE trading days (the monthly event calendar
+# goes out with the pre-market report on the first trading day of a month). watchdog.yml restarts the
 # chain if it ever breaks. There is deliberately NO `schedule:` block here —
 # GitHub's own cron started this bot 2.5–7 HOURS late.
 # Chain runs still skip weekends, holidays and anything outside 7 AM–7 PM.
@@ -20,8 +21,18 @@ on:
         type: choice
         options:
           - premarket
-          - afternoon
+          - midday
           - evening
+          - monthly
+          - afternoon   # old name for midday (kept for queued timer hops)
+      audience:
+        description: "Who gets it (owner = only you — use for test runs)"
+        required: false
+        default: "everyone"
+        type: choice
+        options:
+          - everyone
+          - owner
       trigger:
         description: "Who started it (chain = the timer chain; leave on manual)"
         required: false
@@ -81,6 +92,13 @@ jobs:
           TRIGGER:             ${{ inputs.trigger || 'manual' }}
           SEND_AT:             ${{ inputs.send_at }}
           GITHUB_TOKEN:        ${{ secrets.GITHUB_TOKEN }}
+          AUDIENCE:            ${{ inputs.audience || 'everyone' }}
+          # Position sizing (repo Settings → Variables). Risk is capped at 1%.
+          TRADING_CAPITAL:     ${{ vars.TRADING_CAPITAL }}
+          RISK_PCT:            ${{ vars.RISK_PCT }}
+          NIFTY_LOT:           ${{ vars.NIFTY_LOT }}
+          BANKNIFTY_LOT:       ${{ vars.BANKNIFTY_LOT }}
+          COSTS_PER_LOT:       ${{ vars.COSTS_PER_LOT }}
           GEMINI_MODEL: >-
             ${{
               github.event.inputs.model ||
@@ -89,15 +107,18 @@ jobs:
             }}
         run: python bot.py
 
-      # ── Persist the daily PCR / VIX / FII-DII snapshot back to the repo ─────
-      #    The runner is ephemeral: without this, data/signals.db history is
-      #    lost when the job exits.
-      - name: Persist data (daily snapshot history)
-        if: env.RUN_TYPE == 'evening'
+      # ── Persist state back to the repo ──────────────────────────────────────
+      #    The runner is ephemeral. premarket saves today's plan
+      #    (data/day_plan.json) so the 11:45 report can check what it did;
+      #    evening saves the PCR / VIX / FII-DII history (data/signals.db).
+      #    Only from the default branch — a test run on a feature branch must
+      #    never push that branch's commits to main.
+      - name: Persist data (day plan / snapshot history)
+        if: (env.RUN_TYPE == 'evening' || env.RUN_TYPE == 'premarket') && github.ref_name == github.event.repository.default_branch
         run: |
           git config user.name "market-bot[actions]"
           git config user.email "actions@users.noreply.github.com"
-          git add -f data/signals.db 2>/dev/null || true
+          git add -f data/signals.db data/day_plan.json 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "No data changes to persist"
           else

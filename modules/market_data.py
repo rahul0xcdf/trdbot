@@ -156,3 +156,68 @@ def get_gift_nifty() -> dict | None:
     except Exception as e:
         print(f"[ERROR] get_gift_nifty: {e}")
         return None
+
+
+# ── Global cues + index bars (trade-plan reports) ─────────────────────────────
+
+GLOBAL_TICKERS = [
+    # (label, Yahoo symbol, group)
+    ("S&P 500", "^GSPC", "US"), ("Nasdaq", "^IXIC", "US"), ("Dow Jones", "^DJI", "US"),
+    ("S&P 500 futures", "ES=F", "US"),
+    ("Nikkei 225", "^N225", "Asia"), ("Hang Seng", "^HSI", "Asia"), ("KOSPI", "^KS11", "Asia"),
+    ("Shanghai", "000001.SS", "Asia"),
+    ("USD/INR", "INR=X", "Macro"), ("Dollar index", "DX-Y.NYB", "Macro"),
+    ("Brent crude", "BZ=F", "Macro"), ("US 10Y yield", "^TNX", "Macro"), ("Gold", "GC=F", "Macro"),
+]
+
+
+def get_global_cues() -> list[dict]:
+    """
+    Latest close (or live price) and % change for US / Asian indices, USD/INR,
+    DXY, Brent, US 10Y and gold: [{label, symbol, group, last, change_pct, as_of}].
+    One batched Yahoo call; a symbol that fails is simply left out.
+    """
+    syms = [s for _, s, _ in GLOBAL_TICKERS]
+    out = []
+    try:
+        df = yf.download(syms, period="7d", interval="1d", group_by="ticker",
+                         progress=False, threads=True, auto_adjust=False)
+    except Exception as e:
+        print(f"[ERROR] get_global_cues: {e}")
+        return out
+    for label, sym, group in GLOBAL_TICKERS:
+        try:
+            closes = df[sym]["Close"].dropna()
+            if len(closes) < 2:
+                continue
+            last, prev = float(closes.iloc[-1]), float(closes.iloc[-2])
+            out.append({"label": label, "symbol": sym, "group": group, "last": round(last, 2),
+                        "change_pct": round((last - prev) / prev * 100, 2) if prev else None,
+                        "as_of": closes.index[-1].strftime("%d %b")})
+        except Exception as e:
+            print(f"[WARN] get_global_cues {sym}: {e}")
+    print(f"[OK] get_global_cues: {len(out)}/{len(GLOBAL_TICKERS)}")
+    return out
+
+
+def get_bars(symbol: str, period: str, interval: str):
+    """Yahoo OHLCV bars (IST index for NSE symbols), or None."""
+    try:
+        df = yf.Ticker(symbol).history(period=period, interval=interval, auto_adjust=False)
+        if df is None or df.empty:
+            print(f"[WARN] get_bars {symbol} {interval}: empty")
+            return None
+        print(f"[OK] get_bars {symbol} {interval}: {len(df)} bars, last {df.index[-1]}")
+        return df
+    except Exception as e:
+        print(f"[ERROR] get_bars {symbol} {interval}: {e}")
+        return None
+
+
+def get_index_bundle(yf_symbol: str, proxy_symbol: str | None) -> dict:
+    """1y daily + 5d of 5-min bars for an index, plus 5-min bars of its tracking ETF."""
+    return {
+        "daily": get_bars(yf_symbol, "1y", "1d"),
+        "intra": get_bars(yf_symbol, "5d", "5m"),
+        "proxy": get_bars(proxy_symbol, "5d", "5m") if proxy_symbol else None,
+    }

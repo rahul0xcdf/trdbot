@@ -353,18 +353,44 @@ def format_stock_analysis(a: dict, snapshot: dict | None = None) -> str:
 _TELEGRAM_MAX = 4000  # actual limit 4096; margin for safety
 
 
+def _blocks(message: str) -> list[str]:
+    """
+    Split into paragraph blocks (blank-line separated). A multi-line
+    <pre>…</pre> table always stays inside one block so its tags never get
+    split across two Telegram messages.
+    """
+    blocks, cur, in_pre = [], [], False
+    for line in message.split("\n"):
+        if "<pre>" in line and "</pre>" not in line:
+            in_pre = True
+        if "</pre>" in line:
+            in_pre = False
+        if line.strip() == "" and not in_pre:
+            if cur:
+                blocks.append("\n".join(cur))
+            cur = []
+            continue
+        cur.append(line)
+    if cur:
+        blocks.append("\n".join(cur))
+    return blocks
+
+
 def _chunks(message: str) -> list[str]:
-    """Split long messages on line boundaries (tags are per-line, so safe)."""
+    """Pack paragraph blocks into ≤ _TELEGRAM_MAX messages; oversize blocks split by line."""
     if len(message) <= _TELEGRAM_MAX:
         return [message]
     chunks, current = [], ""
-    for line in message.split("\n"):
-        if len(current) + len(line) + 1 > _TELEGRAM_MAX:
-            chunks.append(current.rstrip("\n"))
-            current = ""
-        current += line + "\n"
+    for block in _blocks(message):
+        pieces = [block] if len(block) <= _TELEGRAM_MAX else block.split("\n")
+        for piece in pieces:
+            sep = "\n\n" if piece is block else "\n"
+            if current and len(current) + len(sep) + len(piece) > _TELEGRAM_MAX:
+                chunks.append(current)
+                current = ""
+            current = f"{current}{sep}{piece}" if current else piece
     if current.strip():
-        chunks.append(current.rstrip("\n"))
+        chunks.append(current)
     return chunks
 
 

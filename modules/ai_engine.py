@@ -391,3 +391,51 @@ Return ONLY JSON: {{"bullets": ["...", "..."]}} with exactly {n} bullets."""
     except Exception as e:
         print(f"[WARN] brief_bullets: AI note skipped ({e})")
         return None
+
+
+# ── Plain-language narration for the trade-plan reports ───────────────────────
+
+TRADER_RULES = """You are a professional Indian equity and index trader (price action, VWAP,
+market structure, support/resistance, volume, index options) writing for a
+BEGINNER with LIMITED capital. Capital protection comes first.
+Hard rules:
+- Use ONLY the facts given. Never invent, change, round differently or add any
+  number, level, strike, premium, stop, target, date or event.
+- The trade plan in the facts was computed by fixed rules. Explain it; never
+  override it. If it says WAIT or NO TRADE, do not suggest a trade.
+- Never present a prediction as certain. Separate what HAS happened (analysis),
+  what is LIKELY (probability) and what must happen BEFORE entering (confirmation).
+- VWAP is a reference, not a magic buy/sell line. RSI is supporting evidence only.
+- Never suggest far-OTM options because they are cheap; never suggest chasing
+  a big candle or an extended move.
+- If NIFTY and BANK NIFTY disagree, explain the conflict plainly.
+- Simple words a beginner understands; no hype, no emojis."""
+
+
+def narrate(kind: str, facts: dict, fields: dict[str, str]) -> dict | None:
+    """
+    Ask Gemini to explain already-computed report facts in plain language.
+    fields = {json_key: "what to write"}. Returns {key: text} or None on any
+    failure (reports always have template text to fall back on).
+    """
+    spec = "\n".join(f'  "{k}": "{v}"' for k, v in fields.items())
+    prompt = f"""{TRADER_RULES}
+
+## Report
+{kind}
+
+## Facts (JSON, computed by the bot — the only truth you may use)
+{json.dumps(facts, default=str)}
+
+Return ONLY a JSON object with exactly these keys:
+{{
+{spec}
+}}"""
+    try:
+        out = _call_gemini(prompt, max_tokens=2048)
+        res = {k: str(out.get(k) or "").strip() for k in fields}
+        print(f"[OK] narrate({kind}): {sum(1 for v in res.values() if v)}/{len(fields)} fields")
+        return res
+    except Exception as e:
+        print(f"[WARN] narrate({kind}): AI text skipped ({e})")
+        return None

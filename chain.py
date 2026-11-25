@@ -36,12 +36,12 @@ from zoneinfo import ZoneInfo
 
 IST = ZoneInfo("Asia/Kolkata")
 
-SLOTS = [("premarket", 8, 15), ("afternoon", 14, 0), ("evening", 18, 0)]
+SLOTS = [("premarket", 8, 45), ("midday", 11, 45), ("evening", 18, 0)]
 
 # Environment wait timers, in minutes. Each must exist as "wait-<n>".
 WAIT_ENVS = [3840, 1920, 960, 480, 240, 120, 60, 30, 15]
 
-LEAD_MIN = 3     # start the report job this early (setup + build ≈ 1.5 min)
+LEAD_MIN = 5     # start the report job this early (setup + build ≈ 2–3 min)
 MAX_HOPS = 15    # safety stop for a runaway chain
 
 TIMER_WORKFLOW = "timer.yml"

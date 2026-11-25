@@ -1,15 +1,20 @@
 """
 Market Intelligence Bot — orchestrator.
 
-Runs on GitHub Actions. A RUN_TYPE env var (set per cron schedule) selects
-which report to send. Three reports a day, Mon–Fri (built in modules/reports.py):
+Runs on GitHub Actions. A RUN_TYPE env var selects which report to send.
+Three NIFTY 50 / BANK NIFTY trading reports a day, Mon–Fri (modules/reports.py):
 
   RUN_TYPE:
-    premarket  → 8:15 AM IST — GIFT Nifty, previous session (Nifty / Sensex /
-                 Bank Nifty), Nifty + Bank Nifty PCR, FII/DII, sector trend
-    afternoon  → 2:00 PM IST — market so far today + news
-    evening    → 6:00 PM IST — day's wrap, gaining vs losing sectors/stocks,
-                 upcoming results / ex-dates / expiry / holidays
+    premarket  → 8:45 AM IST — global & Indian factors, previous-session
+                 levels, Scenario A/B/C with exact triggers, option choice,
+                 final trade-plan table + TRADE DECISION. On the first trading
+                 day of a month it also sends the monthly event calendar.
+    midday     → 11:45 AM IST — the morning's actual price action, what the
+                 morning plan did, after-12 scenarios, HOLD/BOOK/EXIT/WAIT
+                 ("afternoon" is accepted as an old alias)
+    evening    → 6:00 PM IST — full daily wrap, tomorrow's levels & plans,
+                 one trading lesson, upcoming dates
+    monthly    → manual — the month's volatility event calendar
     listen     → manual only — answers Telegram slash commands
                  (long-polls getUpdates for LISTEN_MINUTES minutes)
 
@@ -33,6 +38,8 @@ SHARE_CHAT_IDS = [c.strip() for c in
                   os.environ.get("TELEGRAM_SHARE_CHAT_IDS", "").split(",") if c.strip()]
 
 RUN_TYPE = os.environ.get("RUN_TYPE", "premarket").strip()
+if RUN_TYPE == "afternoon":  # renamed; old timer hops may still send it
+    RUN_TYPE = "midday"
 
 # "chain" = started by the timer chain (chain.py). Those runs get the
 # weekend / holiday / time-window checks, wait for SEND_AT (the exact target
@@ -42,6 +49,9 @@ SEND_AT = int(os.environ.get("SEND_AT", "").strip() or 0)
 
 # DRY_RUN=1 prints the report instead of sending it (local testing).
 DRY_RUN = os.environ.get("DRY_RUN", "").strip() == "1"
+
+# AUDIENCE=owner sends reports only to TELEGRAM_CHAT_ID (test runs).
+OWNER_ONLY = os.environ.get("AUDIENCE", "").strip().lower() == "owner"
 
 # ── Strategy Configs ──────────────────────────────────────────────────────────
 
@@ -154,7 +164,7 @@ def _strategy(nse: dict | None = None) -> dict:
 
 def _send(message: str, share: bool = True):
     """Send to the owner, and to every shared chat unless share=False."""
-    recipients = [TELEGRAM_CHAT_ID] + (SHARE_CHAT_IDS if share else [])
+    recipients = [TELEGRAM_CHAT_ID] + (SHARE_CHAT_IDS if share and not OWNER_ONLY else [])
     if share and SEND_AT:
         import time
         early = SEND_AT - time.time()
@@ -192,20 +202,38 @@ def _log_snapshot(data: dict):
 
 # ── Flows ─────────────────────────────────────────────────────────────────────
 
+def _first_trading_day_of_month() -> bool:
+    from modules import calendar_events
+    today = nse_data._today_ist()
+    holidays = {d for h in nse_data.get_trading_holidays() if (d := nse_data._parse_date(h["date"]))}
+    return calendar_events.is_first_trading_day(today, holidays)
+
+
 def flow_premarket():
-    """8:15 AM — GIFT Nifty, previous session, PCR, FII/DII, sector trend."""
+    """8:45 AM — pre-market trade plan (+ the monthly calendar on day 1)."""
     message, _ = reports.build_premarket()
+    _send(message)
+    try:
+        if _first_trading_day_of_month():
+            flow_monthly()
+    except Exception as e:  # the calendar must never cost us the morning plan
+        print(f"[WARN] monthly calendar skipped: {e}")
+
+
+def flow_midday():
+    """11:45 AM — reassess with the morning's real price action."""
+    message, _ = reports.build_midday()
     _send(message)
 
 
-def flow_afternoon():
-    """2:00 PM — what the market has done so far + the news."""
-    message, _ = reports.build_afternoon()
+def flow_monthly():
+    """Monthly volatility event calendar."""
+    message, _ = reports.build_monthly()
     _send(message)
 
 
 def flow_evening():
-    """6:00 PM — day's wrap, strength vs weakness, upcoming dates."""
+    """6:00 PM — full daily wrap + tomorrow's plan."""
     message, data = reports.build_evening()
     _send(message)
     if not DRY_RUN:
@@ -229,8 +257,9 @@ def flow_listen():
 
 FLOWS = {
     "premarket": flow_premarket,
-    "afternoon": flow_afternoon,
+    "midday": flow_midday,
     "evening": flow_evening,
+    "monthly": flow_monthly,
     "listen": flow_listen,
 }
 
@@ -246,7 +275,7 @@ FLOWS = {
 
 FLOW_WINDOWS = {  # RUN_TYPE: (earliest, latest) as (hour, minute) IST
     "premarket": ((7, 0), (9, 15)),     # must land before the 9:15 open
-    "afternoon": ((13, 30), (15, 30)),  # while the market is still open
+    "midday":    ((11, 15), (13, 30)),  # mid-session, while it's still useful
     "evening":   ((17, 30), (19, 0)),
 }
 

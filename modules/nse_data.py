@@ -593,3 +593,100 @@ def is_trading_holiday(day=None) -> str | None:
         if _parse_date(h["date"]) == day:
             return h["name"]
     return None
+
+
+# ── Full option chain + index futures (for the trade-plan reports) ────────────
+
+def _first_num(d: dict, *keys):
+    for k in keys:
+        v = _num(d.get(k))
+        if v is not None:
+            return v
+    return None
+
+
+def _leg(d: dict | None) -> dict:
+    d = d or {}
+    return {
+        "ltp": _num(d.get("lastPrice")),
+        "bid": _first_num(d, "bidprice", "bidPrice", "buyPrice1"),
+        "ask": _first_num(d, "askPrice", "askprice", "sellPrice1"),
+        "oi": _num(d.get("openInterest")),
+        "chg_oi": _num(d.get("changeinOpenInterest")),
+        "volume": _num(d.get("totalTradedVolume")),
+        "iv": _num(d.get("impliedVolatility")) or None,  # NSE sends 0 when it has no IV
+    }
+
+
+def get_expiries(symbol: str) -> list:
+    """All live expiry dates (as date objects) for an index, nearest first."""
+    return [d for d in (_parse_date(e) for e in get_next_expiries(symbol, 12)) if d]
+
+
+def get_chain(symbol: str, expiry=None, expiries: list | None = None) -> dict | None:
+    """
+    Strike-by-strike index option chain for one expiry (default: nearest):
+      {expiry, expiries, spot, rows: [{strike, CE: leg, PE: leg}], summary}
+    where leg = {ltp, bid, ask, oi, chg_oi, volume, iv}. `summary` is the
+    PCR / max-pain / OI-wall digest from _summarise_chain().
+    """
+    import urllib.parse
+    exps = expiries if expiries is not None else get_expiries(symbol)
+    if not exps:
+        print(f"[ERROR] get_chain({symbol}): no expiries")
+        return None
+    expiry = expiry or exps[0]
+    exp_str = expiry.strftime("%d-%b-%Y")
+    data = _fetch_json(
+        f"/api/option-chain-v3?type=Indices&symbol={urllib.parse.quote(symbol)}"
+        f"&expiry={urllib.parse.quote(exp_str)}",
+        referer="https://www.nseindia.com/option-chain",
+    )
+    if not data:
+        return None
+    records, filtered = data.get("records", {}) or {}, data.get("filtered", {}) or {}
+    raw = filtered.get("data") or records.get("data") or []
+    rows = [{"strike": _num(r.get("strikePrice")), "CE": _leg(r.get("CE")), "PE": _leg(r.get("PE"))}
+            for r in raw if _num(r.get("strikePrice")) is not None]
+    spot = _num(records.get("underlyingValue") or filtered.get("underlyingValue"))
+    summary = _summarise_chain(records, filtered)
+    if not rows:
+        print(f"[ERROR] get_chain({symbol} {exp_str}): no rows")
+        return None
+    print(f"[OK] get_chain({symbol} {exp_str}): {len(rows)} strikes, spot {spot}")
+    return {"expiry": expiry, "expiries": exps, "spot": spot, "rows": rows,
+            "summary": summary, "symbol": symbol}
+
+
+def get_index_futures(symbol: str) -> dict | None:
+    """
+    Near-month index future: {expiry, last, vwap, oi, chg_oi, volume, underlying}.
+    The futures VWAP is the one most Indian index traders watch (the index
+    itself has no volume). Best-effort: NSE may refuse non-browser clients.
+    """
+    import urllib.parse
+    data = _fetch_json(f"/api/quote-derivative?symbol={urllib.parse.quote(symbol)}",
+                       referer=f"https://www.nseindia.com/get-quotes/derivatives?symbol={symbol}")
+    try:
+        futs = [s for s in (data or {}).get("stocks", [])
+                if "FUT" in str((s.get("metadata") or {}).get("instrumentType", "")).upper()]
+        if not futs:
+            print(f"[WARN] get_index_futures({symbol}): no futures in response")
+            return None
+        futs.sort(key=lambda s: _parse_date((s.get("metadata") or {}).get("expiryDate", "")) or _today_ist())
+        md = futs[0].get("metadata") or {}
+        ti = (futs[0].get("marketDeptOrderBook") or {}).get("tradeInfo") or {}
+        out = {
+            "expiry": md.get("expiryDate"),
+            "last": _num(md.get("lastPrice")),
+            "vwap": _num(ti.get("vwap")),
+            "oi": _num(ti.get("openInterest")),
+            "chg_oi": _num(ti.get("changeinOpenInterest")),
+            "volume": _first_num(ti, "tradedVolume") or _num(md.get("numberOfContractsTraded")),
+            "underlying": _num(data.get("underlyingValue")),
+        }
+        print(f"[OK] get_index_futures({symbol}): {out['last']} vwap {out['vwap']} ({out['expiry']})")
+        return out
+    except Exception as e:
+        print(f"[ERROR] get_index_futures({symbol}): {e}")
+        return None
