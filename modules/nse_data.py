@@ -72,6 +72,40 @@ def _fetch_json(path: str, referer: str | None = None):
     return None
 
 
+def _today_ist():
+    from datetime import datetime
+    import pytz
+    return datetime.now(pytz.timezone("Asia/Kolkata")).date()
+
+
+def _parse_date(s: str):
+    """NSE 'dd-Mon-YYYY' (optionally with ' HH:MM') → date, or None."""
+    from datetime import datetime
+    try:
+        return datetime.strptime((s or "").strip()[:11], "%d-%b-%Y").date()
+    except ValueError:
+        return None
+
+
+def _live_expiries(expiries: list[str]) -> list[str]:
+    """Expiry strings that are today or later (keeps order)."""
+    today = _today_ist()
+    live = [e for e in expiries if (_parse_date(e) or today) >= today]
+    return live or expiries
+
+
+def get_next_expiries(symbol: str, n: int = 2) -> list[str]:
+    """Next `n` option expiries for an index/stock, e.g. ['01-Dec-2026', ...]."""
+    import urllib.parse
+    ci = _fetch_json(
+        f"/api/option-chain-contract-info?symbol={urllib.parse.quote(symbol)}",
+        referer="https://www.nseindia.com/option-chain",
+    )
+    if not ci:
+        return []
+    return _live_expiries(ci.get("expiryDates") or [])[:n]
+
+
 def _fetch_chain_v3(kind: str, symbol: str) -> tuple[dict, dict] | None:
     """
     Fetch an option chain via NSE's current v3 API.
@@ -92,11 +126,14 @@ def _fetch_chain_v3(kind: str, symbol: str) -> tuple[dict, dict] | None:
     )
     if not ci:
         return None
-    expiries = ci.get("expiryDates") or []
+    expiries = _live_expiries(ci.get("expiryDates") or [])
     if not expiries:
         print(f"[ERROR] _fetch_chain_v3({symbol}): no expiry dates")
         return None
-    expiry = expiries[0]  # nearest expiry
+    # Nearest expiry that hasn't passed. NSE keeps an expired date at the
+    # head of the list until the next session trades (e.g. the morning
+    # after a Monday expiry + Tuesday holiday), so expiries[0] can be stale.
+    expiry = expiries[0]
 
     data = _fetch_json(
         f"/api/option-chain-v3?type={kind}&symbol={sym}"
@@ -271,10 +308,17 @@ def get_sector_indices() -> list[dict] | None:
         for row in data.get("data", []):
             name = (row.get("index") or "").upper().strip()
             if name in wanted and row.get("last") is not None:
+                last = float(row["last"])
+                week_ago = _num(row.get("oneWeekAgoVal"))
+                words = name.replace("NIFTY ", "").replace(" INDEX", "").split()
+                label = " ".join(w if w in ("IT", "PSU", "FMCG") else w.title() for w in words)
                 out.append({
-                    "sector": name.replace("NIFTY ", "").title(),
-                    "last": round(float(row["last"]), 2),
+                    "sector": label,
+                    "last": round(last, 2),
                     "change_pct": round(float(row.get("percentChange") or 0), 2),
+                    # 1-week % — separates a one-day blip from a real trend.
+                    "week_pct": round((last - week_ago) / week_ago * 100, 2)
+                                if week_ago else None,
                 })
         out.sort(key=lambda x: x["change_pct"], reverse=True)
         print(f"[OK] get_sector_indices: {len(out)} sectors")
@@ -381,3 +425,171 @@ def get_india_vix() -> dict | None:
     except Exception as e:
         print(f"[ERROR] get_india_vix: {e}")
         return None
+
+
+# ── Report helpers (pre-market / afternoon / evening) ─────────────────────────
+
+def _num(v):
+    """NSE sends numbers as floats, strings, '-' or ''. → float or None."""
+    try:
+        return float(str(v).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+
+
+def get_gift_nifty() -> dict | None:
+    """
+    Live GIFT Nifty (NSE IX near-month future) from NSE's marketStatus feed.
+    {last, change, change_pct, as_of, expiry}. Note it's a FUTURE, so its
+    price carries a premium over Nifty spot — read change_pct, not the
+    raw gap to the spot close.
+    """
+    data = _fetch_json("/api/marketStatus")
+    g = (data or {}).get("giftnifty") or {}
+    last = _num(g.get("LASTPRICE"))
+    if last is None:
+        print("[ERROR] get_gift_nifty: no GIFT Nifty in marketStatus")
+        return None
+    result = {
+        "last": last,
+        "change": _num(g.get("DAYCHANGE")),
+        "change_pct": _num(g.get("PERCHANGE")),
+        "as_of": g.get("TIMESTMP"),
+        "expiry": g.get("EXPIRYDATE"),
+    }
+    print(f"[OK] get_gift_nifty: {last} ({result['change_pct']}%) at {result['as_of']}")
+    return result
+
+
+def get_index_board() -> dict | None:
+    """
+    NIFTY 50, NIFTY BANK and INDIA VIX rows from allIndices:
+    {"NIFTY 50": {last, change, change_pct, open, high, low, prev_close,
+                  advances, declines, week_pct}, ..., "_date": "23-Nov-2026"}
+    Before the open this is the previous session's close.
+    """
+    data = _fetch_json("/api/allIndices")
+    if not data:
+        print("[ERROR] get_index_board: no data")
+        return None
+    out = {"_date": None}
+    for row in data.get("data", []):
+        name = (row.get("index") or "").upper().strip()
+        if name not in ("NIFTY 50", "NIFTY BANK", "INDIA VIX"):
+            continue
+        last = _num(row.get("last"))
+        week_ago = _num(row.get("oneWeekAgoVal"))
+        out[name] = {
+            "last": last,
+            "change": _num(row.get("variation")),
+            "change_pct": _num(row.get("percentChange")),
+            "open": _num(row.get("open")),
+            "high": _num(row.get("high")),
+            "low": _num(row.get("low")),
+            "prev_close": _num(row.get("previousClose")),
+            "advances": int(_num(row.get("advances")) or 0),
+            "declines": int(_num(row.get("declines")) or 0),
+            "week_pct": round((last - week_ago) / week_ago * 100, 2)
+                        if last and week_ago else None,
+        }
+        out["_date"] = out["_date"] or row.get("previousDay")
+    # The session the numbers belong to (marketStatus knows it exactly).
+    ms = _fetch_json("/api/marketStatus") or {}
+    for m in ms.get("marketState", []):
+        if m.get("market") == "Capital Market" and m.get("tradeDate"):
+            out["_date"] = m["tradeDate"][:11]
+            out["_status"] = m.get("marketStatusMessage")
+    print(f"[OK] get_index_board: {[k for k in out if not k.startswith('_')]} ({out['_date']})")
+    return out if len(out) > 2 else None
+
+
+def get_top_movers(index: str = "NIFTY", n: int = 3) -> dict:
+    """Top gainers / losers in an index today: {"gainers": [...], "losers": [...]}."""
+    out = {"gainers": [], "losers": []}
+    for key, path in (("gainers", "gainers"), ("losers", "loosers")):  # sic: NSE spells it 'loosers'
+        data = _fetch_json(f"/api/live-analysis-variations?index={path}")
+        rows = ((data or {}).get(index) or {}).get("data") or []
+        items = [{"symbol": r.get("symbol"),
+                  "ltp": _num(r.get("ltp")),
+                  "change_pct": _num(r.get("perChange") or r.get("net_price"))}
+                 for r in rows]
+        items = [i for i in items if i["change_pct"] is not None
+                 and (i["change_pct"] > 0 if key == "gainers" else i["change_pct"] < 0)]
+        # NSE's order isn't reliable (BANKNIFTY losers come smallest-first).
+        items.sort(key=lambda i: i["change_pct"], reverse=(key == "gainers"))
+        out[key] = items[:n]
+    print(f"[OK] get_top_movers({index}): {len(out['gainers'])} up / {len(out['losers'])} down")
+    return out
+
+
+def get_index_constituents() -> dict[str, list[str]]:
+    """{SYMBOL: ["Nifty 50", "Bank Nifty"]} from NSE's published index lists."""
+    lists = {"Nifty 50": "ind_nifty50list.csv", "Bank Nifty": "ind_niftybanklist.csv"}
+    out: dict[str, list[str]] = {}
+    for label, fname in lists.items():
+        try:
+            r = requests.get(f"https://archives.nseindia.com/content/indices/{fname}",
+                             headers={"User-Agent": _HEADERS["User-Agent"]}, timeout=TIMEOUT)
+            r.raise_for_status()
+            lines = r.text.splitlines()
+            i_sym = [h.strip() for h in lines[0].split(",")].index("Symbol")
+            for line in lines[1:]:
+                parts = line.split(",")
+                if len(parts) > i_sym and parts[i_sym].strip():
+                    out.setdefault(parts[i_sym].strip(), []).append(label)
+        except Exception as e:
+            print(f"[WARN] get_index_constituents {label}: {e}")
+    print(f"[OK] get_index_constituents: {len(out)} symbols")
+    return out
+
+
+def get_upcoming_events(days: int = 7) -> dict:
+    """
+    Corporate events for Nifty 50 / Bank Nifty companies in the next `days`:
+      results  — board meetings for financial results (and other meetings)
+      actions  — ex-dates for dividends, splits, bonuses, buybacks
+    Each item: {date, symbol, indices, what}. Sorted by date.
+    """
+    from datetime import timedelta
+    today = _today_ist()
+    frm, to = today.strftime("%d-%m-%Y"), (today + timedelta(days=days)).strftime("%d-%m-%Y")
+    members = get_index_constituents()
+    out = {"results": [], "actions": []}
+
+    for ev in _fetch_json(f"/api/event-calendar?index=equities&from_date={frm}&to_date={to}") or []:
+        sym = ev.get("symbol")
+        if sym in members:
+            out["results"].append({"date": ev.get("date"), "symbol": sym,
+                                   "indices": members[sym],
+                                   "what": ev.get("purpose") or "Board meeting"})
+
+    url = f"/api/corporates-corporateActions?index=equities&from_date={frm}&to_date={to}"
+    for ca in _fetch_json(url) or []:
+        sym = ca.get("symbol")
+        if sym in members:
+            out["actions"].append({"date": ca.get("exDate"), "symbol": sym,
+                                   "indices": members[sym],
+                                   "what": ca.get("subject") or "Corporate action"})
+
+    for k in out:
+        out[k].sort(key=lambda x: _parse_date(x["date"]) or today)
+    print(f"[OK] get_upcoming_events: {len(out['results'])} meetings, {len(out['actions'])} actions")
+    return out
+
+
+def get_trading_holidays() -> list[dict]:
+    """NSE equity trading holidays this year: [{date, day, name}]."""
+    data = _fetch_json("/api/holiday-master?type=trading") or {}
+    out = [{"date": h.get("tradingDate"), "day": h.get("weekDay"), "name": h.get("description")}
+           for h in data.get("CM", [])]
+    print(f"[OK] get_trading_holidays: {len(out)} holidays")
+    return out
+
+
+def is_trading_holiday(day=None) -> str | None:
+    """Holiday name if `day` (default today, IST) is an NSE holiday, else None."""
+    day = day or _today_ist()
+    for h in get_trading_holidays():
+        if _parse_date(h["date"]) == day:
+            return h["name"]
+    return None

@@ -96,14 +96,46 @@ def get_price_data(symbols: list[str], period: str = "7d") -> list[dict]:
     return results
 
 
+def get_sensex() -> dict | None:
+    """
+    BSE Sensex from Yahoo (^BSESN) — BSE's own API blocks non-browser clients.
+    {last, change, change_pct, high, low, date}. Before the open this is the
+    previous session; during market hours yfinance's last daily bar is live.
+    """
+    try:
+        hist = yf.Ticker("^BSESN").history(period="5d", interval="1d")
+        if hist.empty or len(hist) < 2:
+            print("[WARN] get_sensex: insufficient history")
+            return None
+        last, prev = float(hist["Close"].iloc[-1]), float(hist["Close"].iloc[-2])
+        result = {
+            "last": round(last, 2),
+            "change": round(last - prev, 2),
+            "change_pct": round((last - prev) / prev * 100, 2) if prev else None,
+            "high": round(float(hist["High"].iloc[-1]), 2),
+            "low": round(float(hist["Low"].iloc[-1]), 2),
+            "date": hist.index[-1].strftime("%d-%b-%Y"),
+        }
+        print(f"[OK] get_sensex: {result['last']} ({result['change_pct']}%) {result['date']}")
+        return result
+    except Exception as e:
+        print(f"[ERROR] get_sensex: {e}")
+        return None
+
+
 def get_gift_nifty() -> dict | None:
     """
-    Gift Nifty (SGX Nifty successor) proxy.
+    GIFT Nifty for the /premarket command's AI pipeline.
 
-    yfinance does not expose Gift Nifty directly, so we use ^NSEI (Nifty 50
-    spot) as a stand-in for the gap-direction read. This is a proxy, not the
-    actual Gift Nifty print — treat the gap as indicative only.
+    Uses the real GIFT Nifty print from NSE (gap_pct = GIFT Nifty's own
+    overnight % change). Falls back to ^NSEI spot as a rough proxy only if
+    NSE is unreachable.
     """
+    from modules import nse_data
+    real = nse_data.get_gift_nifty()
+    if real:
+        return {"proxy_symbol": "GIFT NIFTY (NSE IX)", "value": real["last"],
+                "prev_close": None, "gap_pct": real["change_pct"]}
     try:
         ticker = yf.Ticker("^NSEI")
         hist = ticker.history(period="5d", interval="1d")

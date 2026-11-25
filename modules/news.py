@@ -6,7 +6,9 @@ headlines keep the original GNews logic. Any single feed failing is skipped
 silently so one dead feed never blocks the rest.
 """
 
+import html
 import os
+import re
 import time
 import calendar
 from datetime import datetime, timezone, timedelta
@@ -21,7 +23,12 @@ INDIAN_RSS_FEEDS = [
     ("Livemint", "https://www.livemint.com/rss/markets"),
 ]
 
-_LOOKBACK = timedelta(hours=12)
+# "Profit"/"markets" feeds still carry entertainment and sports filler.
+_OFF_TOPIC = re.compile(
+    r"box office|collection day|\bfilm\b|\bmovie|\bott\b|trailer|bollywood|"
+    r"bigg boss|celebrity|horoscope|\bipl\b|cricket|world cup",
+    re.IGNORECASE,
+)
 _MAX_INDIAN = 15
 TIMEOUT = 10
 
@@ -38,13 +45,14 @@ def _entry_dt(entry) -> datetime | None:
     return None
 
 
-def fetch_indian_news() -> list[dict]:
+def fetch_indian_news(lookback_hours: float = 12) -> list[dict]:
     """
-    Recent Indian market headlines from RSS, last 12 hours only.
+    Recent Indian market headlines from RSS, last `lookback_hours` only.
 
     Returns list of {title, source, published}, newest first, capped at 15.
     """
     now = datetime.now(timezone.utc)
+    lookback = timedelta(hours=lookback_hours)
     items: list[dict] = []
 
     for source, url in INDIAN_RSS_FEEDS:
@@ -56,12 +64,14 @@ def fetch_indian_news() -> list[dict]:
             feed = feedparser.parse(resp.content)
             count = 0
             for entry in feed.entries:
-                title = (entry.get("title") or "").strip()
-                if not title:
+                # Some feeds double-encode entities ("S&amp;amp;P"); decode
+                # fully here — the Telegram formatter escapes once on output.
+                title = html.unescape(html.unescape((entry.get("title") or "").strip()))
+                if not title or _OFF_TOPIC.search(title):
                     continue
                 dt = _entry_dt(entry)
-                # Keep only last 12h; if no date, keep it (better than dropping).
-                if dt is not None and now - dt > _LOOKBACK:
+                # Keep only the lookback window; if no date, keep it (better than dropping).
+                if dt is not None and now - dt > lookback:
                     continue
                 items.append({
                     "title": title,

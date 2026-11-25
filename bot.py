@@ -2,20 +2,16 @@
 Market Intelligence Bot — orchestrator.
 
 Runs on GitHub Actions. A RUN_TYPE env var (set per cron schedule) selects
-which intraday flow to run. Each flow fetches ONLY what it needs so we don't,
-say, scrape the option chain at the EOD run.
+which report to send. Three reports a day, Mon–Fri (built in modules/reports.py):
 
   RUN_TYPE:
-    premarket      → 8:15 AM IST  — gap, VIX, PCR/max pain, stocks to watch
-    opening        → 9:30 AM IST  — short, actionable open read
-    midmorning     → 11:00 AM IST — trend check + OI
-    european_open  → 12:30 PM IST — trend check + OI
-    london_us      → 1:30 PM IST  — trend check + OI
-    exit_reminder  → 2:45 PM IST  — light: square-off nudge
-    eod            → 4:00 PM IST  — FII/DII + OI for tomorrow
-    vix_check      → every 30 min — SILENT unless VIX > 18 or |change| > 10%
-    listen         → market hours — answers Telegram slash commands
-                     (long-polls getUpdates for LISTEN_MINUTES minutes)
+    premarket  → 8:15 AM IST — GIFT Nifty, previous session (Nifty / Sensex /
+                 Bank Nifty), Nifty + Bank Nifty PCR, FII/DII, sector trend
+    afternoon  → 2:00 PM IST — market so far today + news
+    evening    → 6:00 PM IST — day's wrap, gaining vs losing sectors/stocks,
+                 upcoming results / ex-dates / expiry / holidays
+    listen     → manual only — answers Telegram slash commands
+                 (long-polls getUpdates for LISTEN_MINUTES minutes)
 
 Modules do the real work; this file just wires them together.
 """
@@ -23,9 +19,8 @@ Modules do the real work; this file just wires them together.
 import os
 import sys
 
-from modules import (nse_data, market_data, news, ai_engine, telegram, signals,
-                     commands, premarket, config)
-from modules.market_data import WATCHLIST_INDIA, WATCHLIST_STOCKS_TO_SCAN
+from modules import nse_data, telegram, signals, commands, config, reports
+from modules.market_data import WATCHLIST_INDIA
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -34,8 +29,8 @@ TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 RUN_TYPE = os.environ.get("RUN_TYPE", "premarket").strip()
 
-VIX_ALERT_LEVEL = 18.0
-VIX_ALERT_CHANGE_PCT = 10.0
+# DRY_RUN=1 prints the report instead of sending it (local testing).
+DRY_RUN = os.environ.get("DRY_RUN", "").strip() == "1"
 
 # ── Strategy Configs ──────────────────────────────────────────────────────────
 
@@ -147,180 +142,56 @@ def _strategy(nse: dict | None = None) -> dict:
 
 
 def _send(message: str):
+    if DRY_RUN:
+        print("\n----- DRY RUN: message not sent -----\n" + message + "\n" + "-" * 38)
+        return
     telegram.send_telegram(message, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
 
 
-def _collect_headlines() -> list[str]:
-    """Indian RSS headlines first, then global — as plain title strings."""
-    indian = [h["title"] for h in news.fetch_indian_news()]
-    if len(indian) >= 8:
-        return indian[:12]
-    return (indian + news.fetch_global_news())[:12]
-
-
-def _persist_signals(conn, analysis: dict, market_data_rows: list[dict]):
-    """Log qualifying AI signals to SQLite for later backtesting."""
-    price_by_symbol = {d["symbol"]: d["price"] for d in market_data_rows}
-    for s in analysis.get("top_signals", []):
-        symbol = s.get("symbol")
-        entry = price_by_symbol.get(symbol)
-        if entry is None:
-            continue
-        try:
-            signals.save_signal(
-                conn,
-                strategy=_strategy_name(),
-                symbol=symbol,
-                direction=s.get("direction", "HOLD"),
-                strength=s.get("signal_strength"),
-                sentiment=s.get("sentiment_score"),
-                price_entry=entry,
-            )
-        except Exception as e:
-            print(f"[WARN] _persist_signals {symbol}: {e}")
-
-
-def _log_snapshot(conn, nse: dict, fii_dii: dict | None = None):
-    chain = nse.get("nifty_chain") or {}
-    vix = nse.get("vix") or {}
-    fii = (fii_dii or nse.get("fii_dii") or {})
-    signals.log_nse_snapshot(
-        conn,
-        timestamp=None,
-        pcr=chain.get("pcr"),
-        vix=vix.get("value"),
-        max_pain=chain.get("max_pain"),
-        fii_net=fii.get("fii_net_buy_sell"),
-        dii_net=fii.get("dii_net_buy_sell"),
-    )
+def _log_snapshot(data: dict):
+    """Keep a daily PCR / VIX / max pain / FII-DII history in data/signals.db."""
+    chain = data.get("nifty_chain") or {}
+    vix = data.get("vix") or {}
+    fii = data.get("fii_dii") or {}
+    try:
+        signals.log_nse_snapshot(
+            signals.init_db(),
+            timestamp=None,
+            pcr=chain.get("pcr"),
+            vix=vix.get("last"),
+            max_pain=chain.get("max_pain"),
+            fii_net=fii.get("fii_net_buy_sell"),
+            dii_net=fii.get("dii_net_buy_sell"),
+        )
+    except Exception as e:
+        print(f"[WARN] _log_snapshot: {e}")
 
 
 # ── Flows ─────────────────────────────────────────────────────────────────────
 
 def flow_premarket():
-    """
-    8:15 AM — full AI pre-market pipeline: F&O screener → shortlist deep dive
-    (options ΔOI/IV, delivery %, fundamentals) → sector rotation → Gemini
-    report with ≥85/100 watchlist. Cached to data/premarket_report.json so
-    the command listener can serve /premarket, /watchlist etc. instantly.
-    """
-    report, nse = premarket.generate(_strategy)
-
-    conn = signals.init_db()
-    _log_snapshot(conn, nse)
-    for o in ((report.get("call_opportunities") or [])
-              + (report.get("put_opportunities") or [])):
-        try:
-            signals.save_signal(
-                conn,
-                strategy=_strategy_name(),
-                symbol=o.get("symbol"),
-                direction="CALL" if o.get("bias") == "bullish" else "PUT",
-                strength=(o.get("confidence_score") or 0) / 100.0,
-                sentiment=None,
-                price_entry=o.get("current_price"),
-            )
-        except Exception as e:
-            print(f"[WARN] flow_premarket persist {o.get('symbol')}: {e}")
-
-    _send(telegram.format_ai_premarket(report))
+    """8:15 AM — GIFT Nifty, previous session, PCR, FII/DII, sector trend."""
+    message, _ = reports.build_premarket()
+    _send(message)
 
 
-def flow_opening():
-    nse = {
-        "vix": nse_data.get_india_vix(),
-        "nifty_chain": nse_data.get_nifty_options_chain(),
-    }
-    strategy = _strategy(nse)
-    md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
-    headlines = _collect_headlines()
-    analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
-    _send(telegram.format_opening_range(analysis, md, nse))
+def flow_afternoon():
+    """2:00 PM — what the market has done so far + the news."""
+    message, _ = reports.build_afternoon()
+    _send(message)
 
 
-def flow_midday(label: str):
-    nse = {
-        "vix": nse_data.get_india_vix(),
-        "nifty_chain": nse_data.get_nifty_options_chain(),
-    }
-    strategy = _strategy(nse)
-    md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
-    headlines = _collect_headlines()
-    analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
-    _send(telegram.format_midday(analysis, md, nse, label=label))
-
-
-def flow_exit_reminder():
-    """Light run — no OI scrape; just a square-off nudge with a VIX read."""
-    nse = {"vix": nse_data.get_india_vix()}
-    strategy = _strategy(nse)
-    md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
-    headlines = _collect_headlines()
-    analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
-    _send(telegram.format_midday(analysis, md, nse, label="Exit Reminder ⏰"))
-
-
-def flow_eod():
-    fii_dii = nse_data.get_fii_dii_data()
-    nse = {
-        "vix": nse_data.get_india_vix(),
-        "nifty_chain": nse_data.get_nifty_options_chain(),  # OI setup for tomorrow
-        "fii_dii": fii_dii,
-    }
-    strategy = _strategy(nse)
-    md = market_data.get_price_data(WATCHLIST_STOCKS_TO_SCAN)
-    headlines = _collect_headlines()
-    analysis = ai_engine.analyse_with_ai(md, headlines, strategy, nse=nse)
-
-    conn = signals.init_db()
-    _persist_signals(conn, analysis, md)
-    _log_snapshot(conn, nse, fii_dii=fii_dii)
-
-    _send(telegram.format_eod(analysis, md, nse, fii_dii))
-
-
-def flow_vix_check():
-    """Silent unless VIX is elevated. Never sends a message otherwise."""
-    vix = nse_data.get_india_vix()
-    if not vix or vix.get("value") is None:
-        print("[WARN] flow_vix_check: no VIX data — nothing to do")
-        return
-    value = vix["value"]
-    change = vix.get("change_pct") or 0.0
-    if value > VIX_ALERT_LEVEL or abs(change) > VIX_ALERT_CHANGE_PCT:
-        context = "Elevated VIX — manage risk on open intraday positions."
-        _send(telegram.format_vix_alert(value, change, context))
-        print(f"[OK] flow_vix_check: alert sent (VIX={value}, {change}%)")
-    else:
-        print(f"[OK] flow_vix_check: VIX calm ({value}, {change}%) — staying silent")
-
-
-def _scheduled_listen_minutes(now) -> float:
-    """
-    How long a scheduled listener window should run from `now` (IST).
-
-    Active hours are 6:00 AM–11:30 PM IST; overnight is quiet. Windows are
-    capped at 345 min (GitHub's job limit is 6 h) — starter crons every
-    30 min relay coverage across the day with ~1 min handoff gaps.
-    """
-    if now.hour < 6:
-        return 0.0  # quiet hours
-    cutoff = now.replace(hour=23, minute=30, second=0, microsecond=0)
-    return min((cutoff - now).total_seconds() / 60, 345.0)
+def flow_evening():
+    """6:00 PM — day's wrap, strength vs weakness, upcoming dates."""
+    message, data = reports.build_evening()
+    _send(message)
+    if not DRY_RUN:
+        _log_snapshot(data)
 
 
 def flow_listen():
     """Interactive slash-command listener — long-polls Telegram getUpdates."""
-    minutes_env = os.environ.get("LISTEN_MINUTES", "").strip()
-    if minutes_env:
-        minutes = float(minutes_env)  # explicit window (manual dispatch/test)
-    else:
-        from datetime import datetime
-        from modules.telegram import IST
-        minutes = _scheduled_listen_minutes(datetime.now(IST))
-        if minutes <= 1:
-            print("[OK] flow_listen: quiet hours (11:30 PM–6 AM IST) — skipping")
-            return
+    minutes = float(os.environ.get("LISTEN_MINUTES", "").strip() or 15)
     commands.listen(
         token=TELEGRAM_BOT_TOKEN,
         chat_id=TELEGRAM_CHAT_ID,
@@ -335,15 +206,71 @@ def flow_listen():
 
 FLOWS = {
     "premarket": flow_premarket,
-    "opening": flow_opening,
-    "midmorning": lambda: flow_midday("Mid-Morning Check"),
-    "european_open": lambda: flow_midday("European Open Check"),
-    "london_us": lambda: flow_midday("London/US Check"),
-    "exit_reminder": flow_exit_reminder,
-    "eod": flow_eod,
-    "vix_check": flow_vix_check,
+    "afternoon": flow_afternoon,
+    "evening": flow_evening,
     "listen": flow_listen,
 }
+
+
+# ── Late-run guard ────────────────────────────────────────────────────────────
+#
+# GitHub's cron is best-effort and has fired this bot 2.5–7 HOURS late
+# (e.g. 2 Sep 2026: "premarket" ran at 12:44 PM, "eod" at 8:04 PM). A report
+# that lands at the wrong time is worse than none, so each scheduled flow
+# only runs inside its useful IST window (Mon–Fri). Outside it the job exits
+# cleanly without calling NSE, Gemini or Telegram. Manual "Run workflow"
+# dispatches and local runs are never blocked.
+
+FLOW_WINDOWS = {  # RUN_TYPE: (earliest, latest) as (hour, minute) IST
+    "premarket": ((6, 30), (9, 15)),    # must land before the 9:15 open
+    "afternoon": ((13, 30), (15, 30)),  # while the market is still open
+    "evening":   ((17, 30), (21, 30)),
+}
+
+
+def _late_run_reason(run_type: str, now) -> str | None:
+    """Why a scheduled run at `now` (IST) should be skipped, or None to run."""
+    window = FLOW_WINDOWS.get(run_type)
+    if window is None:
+        return None  # listen etc. — not time-boxed here
+    if now.weekday() >= 5:
+        return "weekend"
+    (h1, m1), (h2, m2) = window
+    start = now.replace(hour=h1, minute=m1, second=0, microsecond=0)
+    end = now.replace(hour=h2, minute=m2, second=0, microsecond=0)
+    if now < start:
+        return f"too early (window opens {start:%I:%M %p} IST)"
+    if now > end:
+        return f"too late (window closed {end:%I:%M %p} IST)"
+    return None
+
+
+def _skip_if_outside_window() -> bool:
+    """True if this scheduled run is outside its window and should exit."""
+    if os.environ.get("GITHUB_EVENT_NAME") != "schedule":
+        return False  # manual dispatch / local run — always allowed
+    from datetime import datetime
+    from modules.telegram import IST
+    now = datetime.now(IST)
+    reason = _late_run_reason(RUN_TYPE, now)
+    if reason is None and RUN_TYPE in FLOW_WINDOWS:
+        holiday = nse_data.is_trading_holiday(now.date())
+        if holiday:
+            print(f"[SKIP] {RUN_TYPE}: NSE holiday today ({holiday}).")
+            return True
+    if reason is None:
+        return False
+    print(f"[SKIP] {RUN_TYPE} started {now:%I:%M %p} IST — {reason}. "
+          "Not sending anything.")
+    # Say when a report is missing instead of staying silent — but never
+    # ping overnight if GitHub's delay pushed the job past 10 PM.
+    if reason != "weekend" and 6 <= now.hour < 22:
+        try:
+            _send(f"⚠️ {RUN_TYPE.title()} report skipped: GitHub started the job "
+                  f"at {now:%I:%M %p} IST, which is {reason}.")
+        except Exception as e:
+            print(f"[WARN] skip notice not sent: {e}")
+    return True
 
 
 def main():
@@ -353,6 +280,8 @@ def main():
     if flow is None:
         print(f"[ERROR] Unknown RUN_TYPE '{RUN_TYPE}'. Valid: {', '.join(FLOWS)}")
         sys.exit(1)
+    if _skip_if_outside_window():
+        return
     flow()
     print("\n=== Done ===\n")
 

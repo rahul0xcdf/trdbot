@@ -40,6 +40,10 @@ def _call_gemini(prompt: str, max_tokens: int = 4096) -> dict:
             json=payload,
             timeout=TIMEOUT,
         )
+        if not r.ok:
+            # Google puts the real reason (expired key, unknown model, quota)
+            # in the body; the bare "400 Bad Request" hid it for weeks.
+            print(f"[ERROR] Gemini HTTP {r.status_code}: {r.text[:400]}")
         r.raise_for_status()
     except Exception as e:
         print(f"[ERROR] _call_gemini request: {e}")
@@ -356,3 +360,34 @@ Return ONLY valid JSON with EXACTLY this schema:
     print(f"[OK] analyse_stock: {result.get('symbol')} {result.get('bias')} "
           f"({result.get('confidence_score')})")
     return result
+
+
+# ── Short AI notes for the three scheduled reports ────────────────────────────
+
+def brief_bullets(task: str, context: str, n: int = 3) -> list[str] | None:
+    """
+    Ask Gemini for `n` short bullet points about `context`.
+
+    Optional by design: returns None on ANY failure (bad key, quota, bad
+    JSON) so the report still goes out with its data sections — the AI note
+    is a bonus, never a single point of failure.
+    """
+    prompt = f"""You are a concise Indian stock market (NSE/BSE) analyst writing for an
+intraday Nifty / Bank Nifty options trader. Use ONLY the data below; do not invent
+numbers, dates or events. Plain English, no hype, each bullet under 30 words.
+
+## Task
+{task}
+
+## Data
+{context}
+
+Return ONLY JSON: {{"bullets": ["...", "..."]}} with exactly {n} bullets."""
+    try:
+        out = _call_gemini(prompt, max_tokens=1024)
+        bullets = [str(b).strip() for b in (out.get("bullets") or []) if str(b).strip()]
+        print(f"[OK] brief_bullets: {len(bullets)} bullets")
+        return bullets[:n] or None
+    except Exception as e:
+        print(f"[WARN] brief_bullets: AI note skipped ({e})")
+        return None

@@ -1,21 +1,15 @@
 name: Telegram Command Listener
 
-# Long-polls Telegram getUpdates so slash commands get answered live from
-# 6:00 AM to 11:30 PM IST (quiet hours overnight). bot.py computes each
-# window's length so it never runs past the 11:30 PM cutoff.
+# Long-polls Telegram getUpdates so slash commands get answered live.
 #
-# GitHub caps a job at 6 h, so continuous coverage = a relay: each run holds
-# up to ~5h45m, while starter crons fire every 30 min as the next runner in
-# line (they QUEUE behind the active window and take over the moment it
-# exits — handoff gap is ~1 min of job setup). GitHub cron is unreliable
-# (2026-07-09: one fire skipped, another 3.5 h late), which is exactly why
-# the starters are this frequent: any single one that runs covers hours.
+# MANUAL ONLY. The old schedule relayed listeners 6:00 AM–11:30 PM IST every
+# day, which billed ~860 Actions minutes/day (~26,000/month) — the 3,000
+# minute plan ran out in the first days of each month and GitHub then
+# blocked EVERY job, including the scheduled market reports. Any always-on
+# listener on GitHub Actions costs more than the plan, even market hours
+# only (~8,500 min/month). Start it by hand (Actions → Run workflow) for a
+# short window, or move commands to a Telegram webhook on a free host.
 on:
-  schedule:
-    # Every 30 min during 6:05 AM–11:05 PM IST (00:35–17:35 UTC), every day.
-    - cron: "5,35 1-17 * * *"
-    - cron: "35 0 * * *"
-
   workflow_dispatch:
     inputs:
       minutes:
@@ -35,7 +29,7 @@ concurrency:
 jobs:
   listen:
     runs-on: ubuntu-latest
-    timeout-minutes: 355   # GitHub-hosted job hard limit is 6 h
+    timeout-minutes: 75    # hard cap so a typo'd "minutes" can't burn hours
     permissions:
       contents: write   # /setstrategy commits data/config.json back to main
 
@@ -60,9 +54,8 @@ jobs:
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
           GNEWS_API_KEY:      ${{ secrets.GNEWS_API_KEY }}
           RUN_TYPE: listen
-          # Scheduled runs leave this empty → bot.py listens until 15:35 IST.
-          # Manual dispatch passes an explicit test window.
-          LISTEN_MINUTES: ${{ github.event.inputs.minutes || '' }}
+          # Manual dispatch passes the window length (default 15 min).
+          LISTEN_MINUTES: ${{ github.event.inputs.minutes || '15' }}
           # No STRATEGY here — the listener resolves data/config.json
           # (/setstrategy) → ACTIVE_STRATEGY_VAR → adaptive, live per command.
           ACTIVE_STRATEGY_VAR: ${{ vars.ACTIVE_STRATEGY || '' }}
