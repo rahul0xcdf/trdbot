@@ -3,25 +3,27 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useQuotes, useWatchlist } from "@/lib/client";
-import { SCHEDULED, engineLevels, isAi, latestWith, opportunities } from "@/lib/derive";
-import { dayIST, num, timeIST } from "@/lib/format";
+import { INDEX_LABEL, SCHEDULED, type SetupItem, activePlan, latestWith, planLevels, setupsOf } from "@/lib/derive";
+import { dayIST, num, pct, timeIST } from "@/lib/format";
 import { GLOBAL, GROUP_LABEL, INDIA, resolveInstrument } from "@/lib/instruments";
 import { STATUS_ORDER } from "@/lib/track";
-import type { AiPremarketAnalysis } from "@/lib/types";
+import type { IndexKey } from "@/lib/types";
+import { INDEX_KEYS } from "@/lib/types";
 import { useTerminalState } from "../shell/context";
 import { Breadth, MoversList, SectorHeatmap } from "../market/breadth";
-import { buildEvents, EventsList, FilterPill, MacroNote, NewsList } from "../market/feeds";
+import { AnalysisStamp, DecisionCard } from "../market/engine";
+import { buildEvents, EventsList, FilterPill, MacroCalendar, NewsList } from "../market/feeds";
 import { indexValue } from "../market/indices";
 import { QuoteRow } from "../market/quotes";
-import { SetupCard, type Setup, StatusChip, useTracking } from "../market/setups";
+import { NoTradeBand, SetupCard, StatusChip, useTracking } from "../market/setups";
 import { Chip, Delta, Empty, Fresh, Live, PageHeader, Panel, PanelHead, Sparkline, Tag, clsx } from "../ui";
 
 /* ── News & events ───────────────────────────────────────────────────────── */
 
 export function NewsView() {
   const state = useTerminalState();
-  const news = latestWith(state, (s) => s.data.news);
-  const events = buildEvents([state.latest.evening, state.latest.premarket, state.latest.afternoon]);
+  const news = latestWith(state, (s) => s.data?.news);
+  const events = buildEvents([state.latest.monthly, state.latest.evening, state.latest.premarket]);
   return (
     <>
       <PageHeader kicker="News & events" title="What's moving">
@@ -36,19 +38,40 @@ export function NewsView() {
           />
           <NewsList items={news?.value ?? []} filterable />
           <p className="border-t border-line px-4 py-3 text-2xs text-dim sm:px-5">
-            The engine keeps title, source, time and link. Category, sentiment, impact and related instruments aren&apos;t in its output, so they aren&apos;t shown.
+            The engine keeps title, source, time and link. Category, sentiment and impact aren&apos;t in its output, so they aren&apos;t shown.
           </p>
         </Panel>
-        <div className="flex flex-col gap-4 lg:gap-5">
-          <Panel id="events">
-            <PanelHead title="Calendar" right={<Tag kind="raw">NSE via engine</Tag>} />
-            <EventsList events={events} />
-          </Panel>
-          <Panel>
-            <PanelHead title="Macro releases" />
-            <MacroNote />
-          </Panel>
-        </div>
+        <Panel id="events">
+          <PanelHead title="Coming up" href="/calendar" right={<Tag kind="engine">calendar</Tag>} />
+          <EventsList events={events} limit={14} />
+        </Panel>
+      </div>
+    </>
+  );
+}
+
+/* ── Macro / volatility calendar ─────────────────────────────────────────── */
+
+export function CalendarView() {
+  const state = useTerminalState();
+  const m = state.latest.monthly;
+  const upcoming = buildEvents([state.latest.evening]);
+  const month = m?.data?.month ? new Date(m.data.month + "-01T12:00:00+05:30").toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "Asia/Kolkata" }) : null;
+  return (
+    <>
+      <PageHeader kicker="Calendar" title={month ? `${month} event calendar` : "Event calendar"} right={m ? <AnalysisStamp snap={m} prefix="Monthly calendar" /> : null}>
+        The engine&apos;s volatility calendar — RBI, Fed, US &amp; India data, expiries, results and holidays, rated HIGH / MEDIUM / LOW impact.
+      </PageHeader>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:gap-5">
+        <Panel>
+          <PanelHead title="This month" right={<Tag kind="engine" />} />
+          {m?.ai?.month_note ? <p className="px-4 pb-3 text-sm text-ink-2 sm:px-5">{m.ai.month_note}</p> : null}
+          <MacroCalendar events={m?.data?.calendar ?? []} />
+        </Panel>
+        <Panel>
+          <PanelHead title="Next 7 days (NSE)" sub="From the 6 PM wrap" right={<Tag kind="raw">NSE via engine</Tag>} />
+          <EventsList events={upcoming} />
+        </Panel>
       </div>
     </>
   );
@@ -59,7 +82,8 @@ export function NewsView() {
 export function GlobalView() {
   const state = useTerminalState();
   const { map, fetchedAt } = useQuotes({ group: "all" });
-  const gift = latestWith(state, (s) => s.data.gift_nifty);
+  const gift = latestWith(state, (s) => s.data?.gift_nifty);
+  const cues = latestWith(state, (s) => s.data?.global);
   const groups = ["us", "asia", "commodities", "currencies"] as const;
   return (
     <>
@@ -85,6 +109,25 @@ export function GlobalView() {
             ))}
           </div>
         </Panel>
+        {cues ? (
+          <Panel>
+            <PanelHead title="As the engine saw it" sub={`${SESSION_NOTE(cues.snap.session)} · ${timeIST(cues.snap.generated_at)} ${dayIST(cues.snap.generated_at)}`} right={<Tag kind="raw">Yahoo via engine</Tag>} />
+            <ul className="divide-y divide-line pb-2">
+              {cues.value.map((c) => (
+                <li key={c.symbol} className="flex items-center justify-between gap-3 px-4 py-2.5 sm:px-5">
+                  <span className="min-w-0">
+                    <span className="block text-sm text-ink">{c.label}</span>
+                    <span className="text-2xs text-dim">{c.group}{c.as_of ? ` · as of ${c.as_of}` : ""}</span>
+                  </span>
+                  <span className="text-right">
+                    <span className="num block text-sm text-ink">{num(c.last)}</span>
+                    <Delta pctValue={c.change_pct} showAbs={false} className="text-xs" />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        ) : null}
         {groups.map((g) => (
           <Panel key={g}>
             <PanelHead title={GROUP_LABEL[g]} right={<Tag kind="raw" />} />
@@ -104,19 +147,18 @@ export function GlobalView() {
 
 export function SectorsView() {
   const state = useTerminalState();
-  const sectors = latestWith(state, (s) => s.data.sectors, SCHEDULED);
-  const mom = latestWith(state, (s) => s.data.sector_momentum);
-  const movers = latestWith(state, (s) => s.data.movers, SCHEDULED);
-  const ai = isAi(state.latest.ai_premarket) ? (state.latest.ai_premarket.analysis as AiPremarketAnalysis) : null;
+  const sectors = latestWith(state, (s) => s.data?.sectors, SCHEDULED);
+  const mom = latestWith(state, (s) => s.data?.sector_momentum);
+  const movers = latestWith(state, (s) => s.data?.movers, SCHEDULED);
   return (
     <>
       <PageHeader kicker="Sectors" title="Sector strength" right={sectors ? <Fresh at={sectors.snap.generated_at} label="Captured" seconds={false} staleAfterMin={600} /> : null}>
-        NSE sector indices from the engine. &ldquo;Building&rdquo; / &ldquo;fading&rdquo; is the engine&apos;s own up-today-and-this-week split.
+        NSE sector indices from the engine. &ldquo;Gaining&rdquo; / &ldquo;losing strength&rdquo; is the engine&apos;s own up-today-and-this-week split.
       </PageHeader>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-5">
         <Panel className="lg:col-span-2">
           <PanelHead title="Heatmap" right={<Tag kind="raw">NSE via engine</Tag>} />
-          <SectorHeatmap sectors={sectors?.value ?? []} momentum={mom?.value} aiBull={ai?.sector_outlook?.bullish_sectors} aiBear={ai?.sector_outlook?.bearish_sectors} />
+          <SectorHeatmap sectors={sectors?.value ?? []} momentum={mom?.value ?? undefined} />
         </Panel>
         <div className="flex flex-col gap-4 lg:gap-5">
           {mom ? (
@@ -124,29 +166,23 @@ export function SectorsView() {
               <PanelHead title="Engine momentum" right={<Tag kind="engine">evening wrap</Tag>} />
               <div className="space-y-3 px-4 pb-5 sm:px-5">
                 <div>
-                  <p className="mb-1.5 text-xs text-up">Gaining strength</p>
+                  <p className="mb-1.5 text-xs text-up">Gaining strength (up today &amp; this week)</p>
                   <div className="flex flex-wrap gap-1.5">{mom.value.building.length ? mom.value.building.map((s) => <Chip key={s.sector} tone="up">{s.sector}</Chip>) : <span className="text-sm text-dim">None</span>}</div>
                 </div>
                 <div>
-                  <p className="mb-1.5 text-xs text-down">Losing strength</p>
+                  <p className="mb-1.5 text-xs text-down">Losing strength (down today &amp; this week)</p>
                   <div className="flex flex-wrap gap-1.5">{mom.value.fading.length ? mom.value.fading.map((s) => <Chip key={s.sector} tone="down">{s.sector}</Chip>) : <span className="text-sm text-dim">None</span>}</div>
                 </div>
               </div>
             </Panel>
           ) : null}
-          {ai?.sector_outlook ? (
-            <Panel>
-              <PanelHead title="AI sector outlook" right={<Tag kind="engine" />} />
-              <p className="px-4 pb-5 text-sm text-ink-2 sm:px-5">{ai.sector_outlook.comment}</p>
-            </Panel>
-          ) : null}
           <Panel>
             <PanelHead title="Breadth" right={<Tag kind="raw" />} />
-            <Breadth snaps={[state.latest.afternoon, state.latest.premarket, state.latest.evening, state.latest.ai_premarket]} />
+            <Breadth snaps={[state.latest.midday, state.latest.premarket, state.latest.evening]} />
           </Panel>
           {movers?.value.NIFTY ? (
             <Panel>
-              <PanelHead title="Top movers" right={<Tag kind="raw" />} />
+              <PanelHead title="Top movers" sub={`${dayIST(movers.snap.generated_at)} close`} right={<Tag kind="raw" />} />
               <MoversList movers={movers.value.NIFTY} title="Nifty 50" />
               {movers.value.BANKNIFTY ? <MoversList movers={movers.value.BANKNIFTY} title="Bank Nifty" /> : null}
             </Panel>
@@ -161,71 +197,89 @@ export function SectorsView() {
 
 type StatusFilter = "all" | (typeof STATUS_ORDER)[number];
 
+function SESSION_NOTE(session: string) {
+  return session === "premarket" ? "8:45 AM pre-market" : session === "midday" ? "11:45 AM midday" : session === "evening" ? "6:00 PM wrap" : session;
+}
+
 export function SetupsView() {
   const state = useTerminalState();
-  const ai = state.latest.ai_premarket;
-  const setups = opportunities(ai);
-  const [side, setSide] = useState<"all" | "CALL" | "PUT">("all");
+  const ap = activePlan(state, new Date(state.server_time));
+  const items = setupsOf(ap?.snap);
+  const [idx, setIdx] = useState<"all" | IndexKey>("all");
+  const [valid, setValid] = useState<"all" | "valid" | "no">("all");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const shown = items.filter((i) => (idx === "all" || i.key === idx) && (valid === "all" || (valid === "valid" ? i.usable : !i.usable)));
   return (
     <>
-      <PageHeader kicker="Trade setups" title="Today's setups">
-        {ai ? (
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <Tag kind="engine">AI pre-market report</Tag> {timeIST(ai.generated_at)} {dayIST(ai.generated_at)}
-            {(ai.analysis as AiPremarketAnalysis).strategy_name ? <span className="text-dim">· {(ai.analysis as AiPremarketAnalysis).strategy_name}</span> : null}
-          </span>
-        ) : (
-          "Setups come from the engine's AI pre-market report."
-        )}
+      <PageHeader kicker="Trade setups" title={ap ? (ap.isToday ? "Today's plan" : `Plan for ${dayIST(ap.day + "T12:00:00+05:30")}`) : "Trade setups"}>
+        {ap ? <AnalysisStamp snap={ap.snap} /> : "Setups come from the engine's 8:45 AM, 11:45 AM and 6:00 PM reports."}
       </PageHeader>
+      <div className="mb-4">
+        <DecisionCard snap={ap?.snap ?? null} planDay={ap} compact />
+      </div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="rail gap-1.5">
-          {(["all", "CALL", "PUT"] as const).map((s) => (
-            <FilterPill key={s} active={side === s} onClick={() => setSide(s)}>
-              {s === "all" ? "Calls & puts" : s === "CALL" ? "Calls" : "Puts"}
+          {(["all", ...INDEX_KEYS] as const).map((s) => (
+            <FilterPill key={s} active={idx === s} onClick={() => setIdx(s)}>
+              {s === "all" ? "Both indices" : INDEX_LABEL[s]}
             </FilterPill>
           ))}
         </div>
         <span className="mx-1 hidden h-5 w-px bg-line sm:block" />
         <div className="rail gap-1.5">
-          {(["all", ...STATUS_ORDER] as StatusFilter[]).map((s) => (
-            <FilterPill key={s} active={status === s} onClick={() => setStatus(s)}>
-              {s === "all" ? "Any status" : s.charAt(0) + s.slice(1).toLowerCase()}
+          {(["all", "valid", "no"] as const).map((s) => (
+            <FilterPill key={s} active={valid === s} onClick={() => setValid(s)}>
+              {s === "all" ? "All scenarios" : s === "valid" ? "Valid" : "No trade"}
             </FilterPill>
           ))}
         </div>
+        {ap?.isToday ? (
+          <>
+            <span className="mx-1 hidden h-5 w-px bg-line sm:block" />
+            <div className="rail gap-1.5">
+              {(["all", ...STATUS_ORDER] as StatusFilter[]).map((s) => (
+                <FilterPill key={s} active={status === s} onClick={() => setStatus(s)}>
+                  {s === "all" ? "Any status" : s.charAt(0) + s.slice(1).toLowerCase()}
+                </FilterPill>
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
-      {ai && setups.length ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {setups
-            .filter((o) => side === "all" || o.side === side)
-            .map((o) => (
-              <FilteredSetup key={o.symbol + o.side} op={o} status={status} />
-            ))}
+      {shown.length ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {shown.map((it) => (
+            <FilteredSetup key={`${it.key}-${it.side}`} item={it} status={status} />
+          ))}
         </div>
       ) : (
         <Panel>
-          <Empty title={ai && (ai.analysis as AiPremarketAnalysis).no_trade ? "The engine called no trade today" : "No setups published"} className="pt-5">
-            {(ai?.analysis as AiPremarketAnalysis | undefined)?.no_trade_reason ||
-              "The AI pre-market report lists call and put opportunities scoring 85+; none are available right now."}
+          <Empty title={items.length ? "Nothing matches these filters" : "No plan published yet"} className="pt-5">
+            {items.length ? "Try another filter." : "The engine sends Scenario A / B / C for NIFTY 50 and BANK NIFTY at 8:45 AM, re-plans at 11:45 AM and sets tomorrow's plan at 6:00 PM."}
           </Empty>
         </Panel>
       )}
+      {ap ? (
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          {INDEX_KEYS.map((k) => {
+            const plan = ap.snap.indices?.[k]?.plan;
+            return plan && (idx === "all" || idx === k) ? <NoTradeBand key={k} snap={ap.snap} plan={plan} label={INDEX_LABEL[k]} /> : null;
+          })}
+        </div>
+      ) : null}
       <p className="mt-4 text-xs text-dim">
-        Status is a mechanical replay of today&apos;s 5-minute prices against the engine&apos;s own entry, stop and targets: Watch = entry not traded · Triggered = entry just
-        traded · Active = running · Completed = Target 2 hit · Invalidated = stop hit. The website never creates or changes a setup.
+        Status replays today&apos;s 5-minute prices through the engine&apos;s own rule (planner.evaluate_plan): Watch = no 15-min close beyond the level · Triggered = closed
+        beyond it, waiting for the retest · Active = retest filled · Completed = T2, or T1 then stopped at entry · Stopped = stop hit. The website never creates or changes a
+        setup.
       </p>
     </>
   );
 }
 
-function FilteredSetup({ op, status }: { op: Setup; status: StatusFilter }) {
-  const state = useTerminalState();
-  const ai = state.latest.ai_premarket!;
-  const t = useTracking(op, ai);
+function FilteredSetup({ item, status }: { item: SetupItem; status: StatusFilter }) {
+  const t = useTracking(item);
   if (status !== "all" && t.status !== status) return null;
-  return <SetupCard op={op} snap={ai} candidate={ai.data.candidates?.[op.symbol]} />;
+  return <SetupCard item={item} />;
 }
 
 /* ── Watchlist ───────────────────────────────────────────────────────────── */
@@ -235,10 +289,7 @@ export function WatchlistView() {
   const { keys, add, remove, move } = useWatchlist();
   const [input, setInput] = useState("");
   const { map, fetchedAt } = useQuotes({ keys });
-  const ai = state.latest.ai_premarket;
-  const setups = opportunities(ai);
-  const niftyLv = useMemo(() => engineLevels(state, "NIFTY"), [state]);
-  const bankLv = useMemo(() => engineLevels(state, "BANKNIFTY"), [state]);
+  const ap = activePlan(state, new Date(state.server_time));
   const submit = () => {
     const k = input.trim().toUpperCase().replace(/[^A-Z0-9&_^=.-]/g, "");
     if (k) add(resolveInstrument(k).key);
@@ -247,7 +298,7 @@ export function WatchlistView() {
   return (
     <>
       <PageHeader kicker="Watchlist" title="Your watchlist" right={<Fresh at={fetchedAt} label="Prices" />}>
-        Saved in this browser. Signals and levels appear only where your engine published them.
+        Saved in this browser. Plan levels appear for NIFTY 50 and BANK NIFTY — the indices your engine plans.
       </PageHeader>
       <form
         onSubmit={(e) => {
@@ -273,8 +324,7 @@ export function WatchlistView() {
                 k={k}
                 state={state}
                 quote={map.get(k)}
-                setup={setups.find((s) => s.symbol === k)}
-                level={k === "NIFTY" ? niftyLv : k === "BANKNIFTY" ? bankLv : []}
+                items={setupsOf(ap?.snap).filter((x) => x.key === resolveInstrument(k).chain)}
                 onRemove={() => remove(k)}
                 onUp={i ? () => move(k, -1) : undefined}
                 onDown={i < keys.length - 1 ? () => move(k, 1) : undefined}
@@ -295,8 +345,7 @@ function WatchRow({
   k,
   state,
   quote,
-  setup,
-  level,
+  items,
   onRemove,
   onUp,
   onDown,
@@ -304,17 +353,17 @@ function WatchRow({
   k: string;
   state: ReturnType<typeof useTerminalState>;
   quote: ReturnType<typeof useQuotes>["quotes"][number] | undefined;
-  setup?: Setup;
-  level: ReturnType<typeof engineLevels>;
+  items: SetupItem[];
   onRemove: () => void;
   onUp?: () => void;
   onDown?: () => void;
 }) {
   const inst = resolveInstrument(k);
   const v = indexValue(inst, quote, state);
-  const price = v.price;
-  const above = price !== null ? level.filter((l) => l.price > price && (l.kind === "resistance")).at(-1) : undefined;
-  const below = price !== null ? level.find((l) => l.price < price && l.kind === "support") : undefined;
+  const bull = items.find((i) => i.side === "bull")?.sc;
+  const bear = items.find((i) => i.side === "bear")?.sc;
+  const best = items.find((i) => i.best);
+  const lv = useMemo(() => planLevels(items[0]?.plan), [items]);
   return (
     <li className="flex items-center gap-3 px-4 py-3 sm:px-5">
       <div className="hidden flex-col sm:flex">
@@ -328,28 +377,24 @@ function WatchRow({
       <Link href={`/markets/${inst.key}`} className="min-w-0 flex-1">
         <p className="flex items-center gap-2 text-[15px] font-medium">
           {inst.name}
-          {setup ? <WatchSetupChip op={setup} /> : null}
+          {best ? <WatchSetupChip item={best} /> : null}
         </p>
         <p className="mt-0.5 truncate text-2xs text-dim">
-          {above || below ? (
+          {bull?.entry != null || bear?.entry != null ? (
             <>
-              {below ? <span className="text-up">S {num(below.price, 0)}</span> : null}
-              {below && above ? " · " : ""}
-              {above ? <span className="text-down">R {num(above.price, 0)}</span> : null} <span>(engine)</span>
-            </>
-          ) : setup ? (
-            <>
-              Entry {setup.entry_zone} · SL {num(setup.stop_loss)} <span>(engine)</span>
+              {bull?.entry != null ? <span className="text-up">Bull above {num(bull.entry, 0)}</span> : null}
+              {bull?.entry != null && bear?.entry != null ? " · " : ""}
+              {bear?.entry != null ? <span className="text-down">Bear below {num(bear.entry, 0)}</span> : null} <span>(engine · {lv.length} levels)</span>
             </>
           ) : (
-            <span>No engine level</span>
+            <span>{inst.chain ? "No plan yet" : "Not planned by the engine"}</span>
           )}
         </p>
       </Link>
       <Sparkline data={v.spark} base={v.prevClose} width={72} height={28} className="hidden sm:block" />
       <div className="w-[104px] text-right">
-        <Live value={price} className="num block text-[15px] font-medium">
-          {num(price, inst.decimals ?? 2)}
+        <Live value={v.price} className="num block text-[15px] font-medium">
+          {num(v.price, inst.decimals ?? 2)}
         </Live>
         <Delta pctValue={v.change_pct} showAbs={false} className="text-xs" />
       </div>
@@ -360,10 +405,9 @@ function WatchRow({
   );
 }
 
-function WatchSetupChip({ op }: { op: Setup }) {
-  const state = useTerminalState();
-  const t = useTracking(op, state.latest.ai_premarket!);
-  return <StatusChip t={t} />;
+function WatchSetupChip({ item }: { item: SetupItem }) {
+  const t = useTracking(item);
+  return t.live ? <StatusChip t={t} /> : <Chip tone="accent">best setup</Chip>;
 }
 
-export { clsx };
+export { clsx, pct };

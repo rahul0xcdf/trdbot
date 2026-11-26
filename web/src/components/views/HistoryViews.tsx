@@ -2,20 +2,22 @@
 import Link from "next/link";
 import { ChevronDown, ExternalLink } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { SESSION_LABEL, SESSION_SHORT, engineBias, isAi, opportunities } from "@/lib/derive";
+import { INDEX_LABEL, SESSION_LABEL, SESSION_SHORT, setupsOf } from "@/lib/derive";
 import { dateIST, dayIST, num, timeIST } from "@/lib/format";
-import type { ReportResult, Outcome } from "@/lib/performance";
-import type { AiPremarketAnalysis, Session, Snapshot, SnapshotMeta, TerminalState } from "@/lib/types";
+import type { ReportResult, Outcome, ScenarioResult } from "@/lib/performance";
+import type { Session, Snapshot, SnapshotMeta } from "@/lib/types";
+import { INDEX_KEYS } from "@/lib/types";
 import { Breadth, FiiDiiCard, MoversList, SectorHeatmap } from "../market/breadth";
-import { Brief, Outlook } from "../market/engine";
-import { buildEvents, EventsList, FilterPill, NewsList } from "../market/feeds";
-import { ChainSummary, OiProfile } from "../market/options";
-import { SetupCard } from "../market/setups";
+import { ActionChip, AiNotes, DecisionCard } from "../market/engine";
+import { buildEvents, EventsList, FilterPill, MacroCalendar, NewsList } from "../market/feeds";
+import { ChainSummary, OiProfile, chainView } from "../market/options";
+import { IndexRead } from "../market/read";
+import { NoTradeBand, SetupCard, statusWords } from "../market/setups";
 import { BiasChip, Chip, Delta, Empty, PageHeader, Panel, PanelHead, Tag, clsx } from "../ui";
 
 /* ── History list ────────────────────────────────────────────────────────── */
 
-const SESS: (Session | "all")[] = ["all", "evening", "premarket", "ai_premarket", "afternoon"];
+const SESS: (Session | "all")[] = ["all", "premarket", "midday", "evening", "monthly"];
 
 export function HistoryView({ initial }: { initial: SnapshotMeta[] }) {
   const [items, setItems] = useState(initial);
@@ -23,7 +25,7 @@ export function HistoryView({ initial }: { initial: SnapshotMeta[] }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [bias, setBias] = useState<"all" | "bullish" | "bearish" | "neutral">("all");
-  const [inst, setInst] = useState("");
+  const [onlySetups, setOnlySetups] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export function HistoryView({ initial }: { initial: SnapshotMeta[] }) {
 
   const shown = items
     .filter((m) => bias === "all" || (m.bias ?? "").toLowerCase().includes(bias))
-    .filter((m) => !inst || m.symbols.some((s) => s.includes(inst.trim().toUpperCase())));
+    .filter((m) => !onlySetups || m.setups > 0);
   const byDay = useMemo(() => {
     const g = new Map<string, SnapshotMeta[]>();
     shown.forEach((m) => {
@@ -52,14 +54,14 @@ export function HistoryView({ initial }: { initial: SnapshotMeta[] }) {
 
   return (
     <>
-      <PageHeader kicker="History" title="Every analysis, as published">
-        Each snapshot is stored exactly as the engine sent it. Open one to see the full picture at that moment.
+      <PageHeader kicker="History" title="Every report, as published">
+        Each report is stored exactly as the engine sent it. Open one to see the plan, the levels and the Telegram message from that moment.
       </PageHeader>
       <div className="mb-4 flex flex-col gap-3">
         <div className="rail gap-1.5">
           {SESS.map((s) => (
             <FilterPill key={s} active={session === s} onClick={() => setSession(s)}>
-              {s === "all" ? "All reports" : SESSION_SHORT[s]}
+              {s === "all" ? "All reports" : SESSION_LABEL[s]}
             </FilterPill>
           ))}
         </div>
@@ -70,48 +72,44 @@ export function HistoryView({ initial }: { initial: SnapshotMeta[] }) {
           <label className="flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-xs text-dim">
             To <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-transparent text-ink outline-none [color-scheme:dark]" />
           </label>
-          <input
-            value={inst}
-            onChange={(e) => setInst(e.target.value)}
-            placeholder="Instrument (NIFTY, INFY…)"
-            className="h-8 w-48 rounded-full border border-line bg-card px-3 text-xs text-ink outline-none placeholder:text-faint"
-          />
           <div className="rail gap-1.5">
             {(["all", "bullish", "bearish", "neutral"] as const).map((b) => (
               <FilterPill key={b} active={bias === b} onClick={() => setBias(b)}>
                 {b === "all" ? "Any bias" : b[0].toUpperCase() + b.slice(1)}
               </FilterPill>
             ))}
+            <FilterPill active={onlySetups} onClick={() => setOnlySetups((x) => !x)}>
+              With a valid setup
+            </FilterPill>
           </div>
         </div>
-        {bias !== "all" ? <p className="text-2xs text-dim">Only AI pre-market reports carry a bias, so the bias filter shows those.</p> : null}
       </div>
       {byDay.length ? (
         <div className={clsx("space-y-5", loading && "opacity-60")}>
           {byDay.map(([d, ms]) => (
             <section key={d}>
-              <p className="eyebrow mb-2">{dayIST(ms[0].generated_at).split(" ")[0]} · {d}</p>
+              <p className="eyebrow mb-2">
+                {dayIST(ms[0].generated_at).split(" ")[0]} · {d}
+              </p>
               <div className="panel divide-y divide-line overflow-hidden">
                 {ms.map((m) => (
-                  <Link key={m.id} href={`/history/${m.id}`} className="grid grid-cols-[72px_1fr_auto] items-center gap-3 px-4 py-3.5 hover:bg-hover/40 sm:grid-cols-[84px_170px_1fr_auto] sm:px-5">
+                  <Link key={m.id} href={`/history/${m.id}`} className="grid grid-cols-[72px_1fr_auto] items-center gap-3 px-4 py-3.5 hover:bg-hover/40 sm:grid-cols-[84px_190px_1fr_auto] sm:px-5">
                     <span className="num text-sm text-ink">{timeIST(m.generated_at)}</span>
-                    <span className="text-sm text-ink-2">{SESSION_LABEL[m.session]}</span>
-                    <span className="col-span-3 col-start-1 row-start-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-dim sm:col-span-1 sm:col-start-auto sm:row-start-auto">
+                    <span className="text-sm text-ink-2">
+                      {SESSION_LABEL[m.session]}
+                      {m.plan_for && m.trade_date && m.plan_for !== m.trade_date ? (
+                        <span className="block text-2xs text-dim">plan for {dayIST(m.plan_for + "T12:00:00+05:30")}</span>
+                      ) : null}
+                    </span>
+                    <span className="col-span-3 col-start-1 row-start-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-dim sm:col-span-1 sm:col-start-auto sm:row-start-auto">
                       {m.bias ? <BiasChip bias={m.bias} /> : null}
-                      <span>
-                        NIFTY <span className="num text-ink-2">{num(m.nifty)}</span>
-                      </span>
-                      {m.support ? (
+                      {m.action ? <ActionChip action={m.action} /> : null}
+                      {m.nifty ? (
                         <span>
-                          S <span className="num text-up">{num(m.support, 0)}</span>
+                          NIFTY <span className="num text-ink-2">{num(m.nifty)}</span>
                         </span>
                       ) : null}
-                      {m.resistance ? (
-                        <span>
-                          R <span className="num text-down">{num(m.resistance, 0)}</span>
-                        </span>
-                      ) : null}
-                      {m.setups ? <span>{m.setups} setups</span> : null}
+                      {m.best ? <span className="truncate text-ink-2">{m.best}</span> : m.setups ? <span>{m.setups} valid</span> : null}
                       {m.demo ? <Chip tone="accent">demo</Chip> : null}
                     </span>
                     <span className="text-dim">›</span>
@@ -123,50 +121,41 @@ export function HistoryView({ initial }: { initial: SnapshotMeta[] }) {
         </div>
       ) : (
         <Panel>
-          <Empty title={loading ? "Loading…" : "No snapshots match these filters"} className="pt-5" />
+          <Empty title={loading ? "Loading…" : "No reports match these filters"} className="pt-5" />
         </Panel>
       )}
     </>
   );
 }
 
-/* ── One snapshot, exactly as stored ─────────────────────────────────────── */
+/* ── One report, exactly as stored ───────────────────────────────────────── */
 
 function sanitiseTelegram(html: string) {
   const esc = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return esc.replace(/&lt;(\/?)(b|i|code)&gt;/g, "<$1$2>").replace(/&amp;(amp|lt|gt|quot|#39);/g, "&$1;");
+  return esc.replace(/&lt;(\/?)(b|i|code|pre)&gt;/g, "<$1$2>").replace(/&amp;(amp|lt|gt|quot|#39);/g, "&$1;");
 }
 
 export function SnapshotView({ snap }: { snap: Snapshot }) {
   const [raw, setRaw] = useState(false);
-  const d = snap.data;
-  const ai = isAi(snap) ? (snap.analysis as AiPremarketAnalysis) : null;
-  const fakeState: TerminalState = {
-    server_time: snap.generated_at,
-    version: "",
-    demo: !!snap.demo,
-    storage: { kind: "memory", ok: true },
-    latest: { [snap.session]: snap },
-    timeline: [],
-    metrics: [],
-  };
-  const bias = ai ? engineBias(fakeState, new Date(snap.generated_at)) : null;
-  const setups = opportunities(snap);
-  const indices = Object.entries(d.indices ?? {});
+  const d = snap.data ?? {};
+  const items = setupsOf(snap);
+  const board = Object.entries(d.board ?? {});
   const events = buildEvents([snap]);
+  const reads = INDEX_KEYS.filter((k) => snap.indices?.[k]);
   return (
     <>
       <PageHeader
         kicker={<Link href="/history">History</Link>}
         title={SESSION_LABEL[snap.session]}
-        right={snap.demo ? <Chip tone="accent">Demo snapshot</Chip> : null}
+        right={snap.demo ? <Chip tone="accent">Demo report</Chip> : null}
       >
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span>
             Generated <span className="num text-ink">{timeIST(snap.generated_at, true)}</span> {dateIST(snap.generated_at)}
           </span>
-          {snap.trade_date ? <span className="text-dim">· market data for session {snap.trade_date}</span> : null}
-          {snap.market_status ? <span className="text-dim">· NSE: {snap.market_status}</span> : null}
+          {snap.trade_date ? <span className="text-dim">· market data for {snap.trade_date}</span> : null}
+          {snap.plan_for && snap.plan_for !== snap.trade_date ? <span className="text-dim">· plan for {snap.plan_for}</span> : null}
+          {d.board_status ? <span className="text-dim">· NSE: {d.board_status}</span> : null}
           {snap.source?.run_url ? (
             <a href={snap.source.run_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline">
               GitHub run <ExternalLink className="size-3" />
@@ -176,86 +165,72 @@ export function SnapshotView({ snap }: { snap: Snapshot }) {
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-5">
-        {snap.analysis?.kind === "brief" ? (
-          <div className="lg:col-span-2">
-            <Brief snap={snap} />
-          </div>
-        ) : null}
-        {ai ? (
-          <div className="lg:col-span-3">
-            <Outlook bias={bias} />
-          </div>
-        ) : null}
-        {ai && (ai.overnight_summary || ai.domestic_summary) ? (
+        {snap.note ? (
           <Panel className="lg:col-span-3">
-            <PanelHead title="Summaries" right={<Tag kind="engine" />} />
-            <div className="grid grid-cols-1 gap-4 px-4 pb-5 text-sm text-ink-2 sm:grid-cols-2 sm:px-5">
-              {ai.overnight_summary ? (
-                <div>
-                  <p className="mb-1 text-2xs text-dim">Overnight</p>
-                  {ai.overnight_summary}
-                </div>
-              ) : null}
-              {ai.domestic_summary ? (
-                <div>
-                  <p className="mb-1 text-2xs text-dim">Domestic</p>
-                  {ai.domestic_summary}
-                </div>
-              ) : null}
-            </div>
+            <p className="px-4 py-3 text-sm text-ink-2 sm:px-5">{snap.note} — no assessment, NO TRADE on missing data.</p>
           </Panel>
         ) : null}
-        {ai?.nifty_levels || ai?.banknifty_levels ? (
-          <Panel>
-            <PanelHead title="AI levels" right={<Tag kind="engine" />} />
-            <div className="space-y-3 px-4 pb-5 text-sm sm:px-5">
-              {(["nifty_levels", "banknifty_levels"] as const).map((k) =>
-                ai[k] ? (
-                  <div key={k}>
-                    <p className="mb-1 text-2xs text-dim">{k === "nifty_levels" ? "Nifty" : "Bank Nifty"}</p>
-                    <p>
-                      R <span className="num text-down">{(ai[k]!.resistances ?? []).map((x) => num(x, 0)).join(" · ")}</span>
-                    </p>
-                    <p>
-                      S <span className="num text-up">{(ai[k]!.supports ?? []).map((x) => num(x, 0)).join(" · ")}</span>
-                    </p>
-                  </div>
-                ) : null,
-              )}
+        {snap.decision ? (
+          <div className="lg:col-span-2">
+            <DecisionCard snap={snap} />
+          </div>
+        ) : null}
+        {snap.ai && Object.keys(snap.ai).length ? (
+          <div className={snap.decision ? "" : "lg:col-span-3"}>
+            <AiNotes snap={snap} />
+          </div>
+        ) : null}
+        {reads.length ? (
+          <Panel className="lg:col-span-3">
+            <PanelHead title="Engine read" right={<Tag kind="engine" />} />
+            <div className="grid grid-cols-1 gap-6 px-4 pb-5 sm:px-5 lg:grid-cols-2">
+              {reads.map((k) => (
+                <IndexRead key={k} snap={snap} ix={snap.indices[k]!} />
+              ))}
             </div>
+            {snap.indices?.NIFTY?.eod?.lesson ? (
+              <div className="border-t border-line px-4 py-3.5 sm:px-5">
+                <p className="eyebrow mb-1">Trading lesson · {snap.indices.NIFTY.eod.lesson.title}</p>
+                <p className="text-sm text-ink-2">{snap.ai?.lesson ?? snap.indices.NIFTY.eod.lesson.text}</p>
+              </div>
+            ) : null}
           </Panel>
         ) : null}
-        {setups.length ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-3 xl:grid-cols-3">
-            {setups.map((o) => (
-              <SetupCard key={o.symbol + o.side} op={o} snap={snap} candidate={d.candidates?.[o.symbol]} />
+        {items.length ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:col-span-3 xl:grid-cols-4">
+            {items.map((it) => (
+              <SetupCard key={`${it.key}-${it.side}`} item={it} />
             ))}
           </div>
         ) : null}
-        {indices.length ? (
+        {reads.some((k) => snap.indices[k]?.plan?.no_trade?.low) ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:col-span-3">
+            {reads.map((k) => (snap.indices[k]?.plan ? <NoTradeBand key={k} snap={snap} plan={snap.indices[k]!.plan!} label={INDEX_LABEL[k]} /> : null))}
+          </div>
+        ) : null}
+        {board.length || d.gift_nifty ? (
           <Panel>
             <PanelHead title="Indices at the time" right={<Tag kind="raw">NSE via engine</Tag>} />
             <div className="divide-y divide-line pb-2">
-              {d.gift_nifty ? (
-                <Row name="GIFT Nifty" last={d.gift_nifty.last} pctv={d.gift_nifty.change_pct} sub={`as of ${d.gift_nifty.as_of ?? "—"}`} />
-              ) : null}
-              {indices.map(([k, v]) => (
+              {d.gift_nifty ? <Row name="GIFT Nifty" last={d.gift_nifty.last} pctv={d.gift_nifty.change_pct} sub={`as of ${d.gift_nifty.as_of ?? "—"}`} /> : null}
+              {board.map(([k, v]) => (
                 <Row key={k} name={k} last={v.last} pctv={v.change_pct ?? null} sub={v.low != null && v.high != null ? `${num(v.low)} – ${num(v.high)}` : undefined} />
               ))}
             </div>
           </Panel>
         ) : null}
-        {(["NIFTY", "BANKNIFTY"] as const).map((k) =>
-          d.option_chains?.[k] ? (
+        {reads.map((k) => {
+          const c = chainView(snap.indices[k]?.chain);
+          return c ? (
             <Panel key={k}>
-              <PanelHead title={`${k === "NIFTY" ? "Nifty" : "Bank Nifty"} chain`} right={<Tag kind="raw" />} />
+              <PanelHead title={`${INDEX_LABEL[k]} chain`} right={<Tag kind="raw" />} />
               <div className="space-y-4 px-4 pb-5 sm:px-5">
-                <ChainSummary c={d.option_chains[k]!} />
-                <OiProfile c={d.option_chains[k]!} width={6} />
+                <ChainSummary c={c} />
+                <OiProfile c={c} width={6} />
               </div>
             </Panel>
-          ) : null,
-        )}
+          ) : null;
+        })}
         {d.fii_dii ? (
           <Panel>
             <PanelHead title="FII / DII" right={<Tag kind="raw" />} />
@@ -265,10 +240,10 @@ export function SnapshotView({ snap }: { snap: Snapshot }) {
         {d.sectors?.length ? (
           <Panel className="lg:col-span-2">
             <PanelHead title="Sectors" right={<Tag kind="raw" />} />
-            <SectorHeatmap sectors={d.sectors} momentum={d.sector_momentum} />
+            <SectorHeatmap sectors={d.sectors} momentum={d.sector_momentum ?? undefined} />
           </Panel>
         ) : null}
-        {d.indices?.["NIFTY 50"]?.advances !== undefined || d.breadth ? (
+        {d.board?.["NIFTY 50"]?.advances !== undefined ? (
           <Panel>
             <PanelHead title="Breadth" right={<Tag kind="raw" />} />
             <Breadth snaps={[snap]} />
@@ -281,7 +256,12 @@ export function SnapshotView({ snap }: { snap: Snapshot }) {
             {d.movers.BANKNIFTY ? <MoversList movers={d.movers.BANKNIFTY} title="Bank Nifty" /> : null}
           </Panel>
         ) : null}
-        {events.length ? (
+        {snap.session === "monthly" && d.calendar?.length ? (
+          <Panel className="lg:col-span-3">
+            <PanelHead title="Event calendar" right={<Tag kind="engine" />} />
+            <MacroCalendar events={d.calendar} showPast />
+          </Panel>
+        ) : events.length ? (
           <Panel>
             <PanelHead title="Calendar" right={<Tag kind="raw" />} />
             <EventsList events={events} />
@@ -329,39 +309,59 @@ function Row({ name, last, pctv, sub }: { name: string; last: number | null; pct
 /* ── Performance: analysis vs actual ─────────────────────────────────────── */
 
 const OUT: Record<Outcome, { label: string; tone: "up" | "down" | "accent" | "neutral" | "info" }> = {
-  T2: { label: "Target 2 reached", tone: "up" },
-  T1: { label: "Target 1 reached", tone: "up" },
+  T2: { label: "T2 reached", tone: "up" },
+  T1: { label: "T1 reached", tone: "up" },
+  T1_BE: { label: "T1, rest at entry", tone: "up" },
   STOP: { label: "Stopped", tone: "down" },
-  OPEN: { label: "Entered · no exit level by close", tone: "info" },
-  NO_ENTRY: { label: "Entry never traded", tone: "neutral" },
-  AMBIGUOUS: { label: "Stop & target same bar", tone: "accent" },
+  OPEN: { label: "Filled · open at close", tone: "info" },
+  NO_FILL: { label: "Triggered · no retest", tone: "neutral" },
+  NO_TRIGGER: { label: "Not triggered", tone: "neutral" },
   PENDING: { label: "Session in progress", tone: "accent" },
   NO_DATA: { label: "No price data", tone: "neutral" },
 };
 
+const FILLED: Outcome[] = ["T2", "T1", "T1_BE", "STOP", "OPEN"];
+
 export function PerformanceView() {
   const [data, setData] = useState<{ results: ReportResult[]; computed_at: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [scope, setScope] = useState<"valid" | "best" | "all">("valid");
   useEffect(() => {
     fetch("/api/performance?n=20")
       .then((r) => r.json())
       .then(setData)
       .catch((e) => setErr(String(e)));
   }, []);
-  const all = data?.results.flatMap((r) => r.setups.filter((s) => s.outcome !== "PENDING" && s.outcome !== "NO_DATA")) ?? [];
-  const count = (o: Outcome[]) => all.filter((s) => o.includes(s.outcome)).length;
+  const pick = (s: ScenarioResult) => (scope === "all" ? true : scope === "best" ? s.best : s.usable);
+  const scored = data?.results.flatMap((r) => r.results.filter((s) => pick(s) && s.outcome !== "PENDING" && s.outcome !== "NO_DATA")) ?? [];
+  const count = (o: Outcome[]) => scored.filter((s) => o.includes(s.outcome)).length;
   return (
     <>
-      <PageHeader kicker="Performance" title="Analysis vs actual">
-        Each AI report&apos;s setups and Nifty levels, replayed against what prices actually did. Nothing is scored until that session&apos;s prices exist.
+      <PageHeader kicker="Performance" title="Plan vs actual">
+        Each 8:45 AM plan&apos;s Scenario A and B, replayed on that session&apos;s real 5-minute prices with the engine&apos;s own rule (15-min close beyond the level, then a retest).
+        Nothing is scored until that session&apos;s prices exist.
       </PageHeader>
-      {all.length ? (
-        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-4 rail gap-1.5">
+        {(
+          [
+            ["valid", "Setups the engine would take"],
+            ["best", "Best setup only"],
+            ["all", "Every scenario"],
+          ] as const
+        ).map(([k, l]) => (
+          <FilterPill key={k} active={scope === k} onClick={() => setScope(k)}>
+            {l}
+          </FilterPill>
+        ))}
+      </div>
+      {scored.length ? (
+        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
           {[
-            ["Setups scored", all.length, "text-ink"],
-            ["Reached a target", count(["T1", "T2"]), "text-up"],
+            ["Scored", scored.length, "text-ink"],
+            ["Filled", count(FILLED), "text-ink"],
+            ["Reached T1+", count(["T1", "T2", "T1_BE"]), "text-up"],
             ["Stopped", count(["STOP"]), "text-down"],
-            ["Never entered", count(["NO_ENTRY"]), "text-ink-2"],
+            ["No fill", count(["NO_FILL", "NO_TRIGGER"]), "text-ink-2"],
           ].map(([k, v, c]) => (
             <div key={k as string} className="panel p-4">
               <p className="text-xs text-dim">{k}</p>
@@ -373,12 +373,12 @@ export function PerformanceView() {
       {err ? <p className="text-sm text-down">{err}</p> : null}
       {!data ? (
         <Panel>
-          <Empty title="Replaying reports against prices…" className="pt-5" />
+          <Empty title="Replaying plans against prices…" className="pt-5" />
         </Panel>
       ) : data.results.length === 0 ? (
         <Panel>
-          <Empty title="No AI pre-market reports stored yet" className="pt-5">
-            Performance appears once the engine has published AI reports and the market has traded those sessions.
+          <Empty title="No 8:45 AM plans stored yet" className="pt-5">
+            Performance appears once the engine has published pre-market plans and the market has traded those sessions.
           </Empty>
         </Panel>
       ) : (
@@ -388,93 +388,62 @@ export function PerformanceView() {
               <PanelHead
                 title={
                   <Link href={`/history/${r.snapshotId}`} className="hover:text-accent-hi">
-                    {dayIST(r.generated_at)} · AI report {timeIST(r.generated_at)}
+                    {dayIST(r.day + "T12:00:00+05:30")} · 8:45 AM plan
                   </Link>
                 }
+                sub={r.best ? `Best setup: ${r.best}` : r.action ?? undefined}
                 right={
                   <>
-                    <BiasChip bias={r.sentiment} />
-                    {r.recommendation ? <Chip>{r.recommendation.replace("_", " ")}</Chip> : null}
+                    <BiasChip bias={r.market_bias} />
                     {r.pending ? <Chip tone="accent">In progress</Chip> : null}
                     {r.demo ? <Chip tone="accent">demo</Chip> : null}
                   </>
                 }
               />
-              {r.nifty?.levels.length ? (
-                <div className="px-4 pb-4 sm:px-5">
-                  <p className="mb-2 text-xs text-dim">
-                    Nifty levels ·{" "}
-                    {r.nifty.day ? (
-                      <>
-                        actual range <span className="num text-ink-2">{num(r.nifty.day.low)} – {num(r.nifty.day.high)}</span>, close{" "}
-                        <span className="num text-ink-2">{num(r.nifty.day.close)}</span>
-                      </>
-                    ) : (
-                      "awaiting that session's prices"
-                    )}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {r.nifty.levels
-                      .sort((a, b) => b.price - a.price)
-                      .map((l) => (
-                        <span
-                          key={l.kind + l.price}
-                          className={clsx(
-                            "num rounded-lg border px-2 py-1 text-xs",
-                            !r.nifty?.day ? "border-line text-dim" : l.tested ? (l.kind === "resistance" ? "border-[#e58c7a55] text-down" : "border-[#9cc29a55] text-up") : "border-line text-dim",
-                          )}
-                          title={r.nifty?.day ? (l.tested ? "Traded at during the session" : "Not reached") : "No data yet"}
-                        >
-                          {l.kind === "resistance" ? "R" : "S"} {num(l.price, 0)} {r.nifty?.day ? (l.tested ? "· tested" : "· not reached") : ""}
-                        </span>
-                      ))}
-                  </div>
-                </div>
-              ) : null}
-              {r.setups.length ? (
-                <div className="overflow-x-auto border-t border-line">
-                  <table className="w-full min-w-[620px] text-sm">
-                    <thead>
-                      <tr className="text-left text-2xs text-dim">
-                        <th className="px-4 py-2 font-medium sm:px-5">Setup</th>
-                        <th className="px-2 py-2 font-medium">Entry</th>
-                        <th className="px-2 py-2 font-medium">Stop</th>
-                        <th className="px-2 py-2 font-medium">T1 / T2</th>
-                        <th className="px-2 py-2 font-medium">Outcome</th>
-                        <th className="px-4 py-2 font-medium sm:px-5">Basis</th>
+              <div className="overflow-x-auto border-t border-line">
+                <table className="w-full min-w-[760px] text-sm">
+                  <thead>
+                    <tr className="text-left text-2xs text-dim">
+                      <th className="px-4 py-2 font-medium sm:px-5">Scenario</th>
+                      <th className="px-2 py-2 font-medium">Engine said</th>
+                      <th className="px-2 py-2 font-medium">Trigger</th>
+                      <th className="px-2 py-2 font-medium">Stop</th>
+                      <th className="px-2 py-2 font-medium">T1 / T2</th>
+                      <th className="px-2 py-2 font-medium">Replay</th>
+                      <th className="px-4 py-2 font-medium sm:px-5">Bot at 11:45</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {r.results.map((s) => (
+                      <tr key={s.index + s.side} className={clsx("border-t border-line/60", !pick(s) && "opacity-45")}>
+                        <td className="px-4 py-2.5 sm:px-5">
+                          <span className="font-medium">{s.label}</span> <span className={s.side === "bull" ? "text-up" : "text-down"}>{s.title}</span>
+                          {s.best ? <Chip tone="accent" className="ml-1.5">best</Chip> : null}
+                        </td>
+                        <td className="px-2 text-xs">{s.usable ? <span className="text-up">Valid</span> : <span className="text-dim" title={s.verdict}>No trade</span>}</td>
+                        <td className="num px-2 text-accent">{num(s.entry, 0)}</td>
+                        <td className="num px-2 text-down">{num(s.stop, 0)}</td>
+                        <td className="num px-2 text-up">
+                          {num(s.t1, 0)} / {num(s.t2, 0)}
+                        </td>
+                        <td className="px-2">
+                          <Chip tone={OUT[s.outcome].tone} title={s.note}>
+                            {OUT[s.outcome].label}
+                          </Chip>
+                          {s.replay?.fill_time ? <span className="num ml-1.5 text-2xs text-dim">fill {timeIST(s.replay.fill_time)}</span> : null}
+                        </td>
+                        <td className="px-4 text-2xs text-dim sm:px-5">{s.engineMidday ? statusWords({ entry: s.entry, stop: s.stop, t1: s.t1, t2: s.t2 }, s.engineMidday).replace(/^[\d,]+: /, "") : "—"}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {r.setups.map((s) => (
-                        <tr key={s.symbol + s.side} className="border-t border-line/60">
-                          <td className="px-4 py-2.5 sm:px-5">
-                            <span className="font-medium">{s.symbol}</span> <span className={s.side === "CALL" ? "text-up" : "text-down"}>{s.side}</span>
-                          </td>
-                          <td className="num px-2 text-accent">{s.entry_zone}</td>
-                          <td className="num px-2 text-down">{num(s.stop_loss)}</td>
-                          <td className="num px-2 text-up">
-                            {num(s.target_1)} / {num(s.target_2)}
-                          </td>
-                          <td className="px-2">
-                            <Chip tone={OUT[s.outcome].tone}>{OUT[s.outcome].label}</Chip>
-                          </td>
-                          <td className="px-4 text-2xs text-dim sm:px-5">
-                            {s.basis === "15m" ? "15-min bars" : s.basis === "1d" ? "Daily bar" : "—"}
-                            {s.day ? <span className="num"> · {num(s.day.low)}–{num(s.day.high)}</span> : null}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="border-t border-line px-4 py-3 text-sm text-dim sm:px-5">No setups in this report.</p>
-              )}
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Panel>
           ))}
           <p className="text-xs text-dim">
-            Replays use the engine&apos;s numbers untouched. With 15-minute bars the order of moves is known; with a daily bar only (older than ~25 days) a session where both
-            stop and target traded is marked as ambiguous rather than guessed. {data.computed_at ? `Computed ${timeIST(data.computed_at)}.` : ""}
+            The replay is planner.evaluate_plan ported line for line (verified against the Python on 72 cases): trigger = first 15-min close beyond the level, fill = the next
+            5-min bar that retests it within 25% of the risk and closes on the right side of the stop. Plans older than 25 days use 15-min bars (approximate fills); older than 60
+            days can&apos;t be replayed. {data.computed_at ? `Computed ${timeIST(data.computed_at)}.` : ""}
           </p>
         </div>
       )}

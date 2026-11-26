@@ -77,6 +77,7 @@ def fetch_indian_news(lookback_hours: float = 12) -> list[dict]:
                     "title": title,
                     "source": source,
                     "published": dt.isoformat() if dt else None,
+                    "link": entry.get("link"),  # used by the website only
                     "_sort": dt or now,
                 })
                 count += 1

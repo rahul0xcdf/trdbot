@@ -90,18 +90,18 @@ function mergeMetrics(rows: MetricRow[], snaps: Snapshot[]): MetricRow[] {
   const byDay = new Map<string, MetricRow>();
   rows.forEach((r) => byDay.set(r.ts.slice(0, 10), r));
   snaps
-    .filter((s) => s.session === "evening" && s.data.option_chains?.NIFTY)
+    .filter((s) => s.session === "evening")
     .forEach((s) => {
-      const c = s.data.option_chains!.NIFTY!;
+      const c = s.indices?.NIFTY?.chain?.summary;
       const day = new Date(s.generated_at).toISOString().slice(0, 10);
       if (byDay.has(day)) return;
       byDay.set(day, {
         ts: new Date(s.generated_at).toISOString(),
-        pcr: c.pcr,
-        vix: s.data.indices?.["INDIA VIX"]?.last ?? null,
-        max_pain: c.max_pain,
-        fii_net: s.data.fii_dii?.fii_net_buy_sell ?? null,
-        dii_net: s.data.fii_dii?.dii_net_buy_sell ?? null,
+        pcr: c?.pcr ?? null,
+        vix: s.data?.vix?.last ?? null,
+        max_pain: c?.max_pain ?? null,
+        fii_net: s.data?.fii_dii?.fii_net_buy_sell ?? null,
+        dii_net: s.data?.fii_dii?.dii_net_buy_sell ?? null,
         source: "snapshot",
       });
     });

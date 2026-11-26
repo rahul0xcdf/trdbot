@@ -6,7 +6,7 @@ report, it also POSTs the structured data that report was built from. This
 Next.js app stores that data and shows it.
 
 ```
-NSE / Yahoo / RSS ──► engine (bot.py, reports.py, ai_engine.py)  ── unchanged
+NSE / Yahoo / RSS ──► engine (bot.py, reports.py, planner.py)  ── unchanged
                           │
                           ├──► Telegram (same message as before)
                           │
@@ -41,15 +41,28 @@ NSE / Yahoo / RSS ──► engine (bot.py, reports.py, ai_engine.py)  ── un
 
 ## What the engine publishes
 
+`modules/publish.py` (schema_version 2) sends the same objects the report
+builders already computed — nothing is recalculated for the website.
+
 | Session | When (IST) | Source in the engine | What's in it |
 |---|---|---|---|
-| `evening` | 6:00 PM | `reports.build_evening` | Close, FII/DII, sectors + building/fading, movers, Nifty chain, results/ex-dates/expiry/holidays, news, AI "Outlook" bullets |
-| `premarket` | 8:15 AM | `reports.build_premarket` | GIFT Nifty + opening hint, previous session, Nifty & Bank Nifty chains (with per-strike rows), PCR reads, FII/DII, sectors, today's events, AI "Today's read" |
-| `afternoon` | 2:00 PM | `reports.build_afternoon` | Market so far, sectors, movers, news, AI "What's driving it" |
-| `ai_premarket` | when `/premarket` runs | `premarket.generate` | Bias, GO/CAUTION, confidence, bull/range/bear %, Nifty & Bank Nifty levels, call/put setups (entry, SL, T1, T2, strike, expiry, scores), alerts, risks, plan, screener indicators |
+| `premarket` | 8:45 AM | `reports.build_premarket` | GIFT Nifty, global cues, VIX, FII/DII, overnight news, today's events; per index: previous session (OHLC, candle, VWAP, value area, pivots/CPR, swings, trendlines, EMAs, RSI), option chain, bias score, expected open, **Scenario A / B / C** (trigger, stop, T1/T2, R:R, confirmation, exit, invalidation, option + premiums + lots, ATM-vs-ITM), level zones; the **TRADE DECISION**; Gemini narration |
+| `midday` | 11:45 AM | `reports.build_midday` | Intraday read (opening range, VWAP behaviour, structure, breakout/false-breakout tests, day type, futures), what happened to the 8:45 plan, re-planned scenarios, HOLD / BOOK / TRAIL / EXIT / WAIT / ENTER |
+| `evening` | 6:00 PM | `reports.build_evening` | Where buyers / sellers stepped in, false breakouts, levels created, candle, lesson, movers, sector momentum, results / ex-dates / expiries / holidays, **tomorrow's** zones and plans (`plan_for` = next trading day) |
+| `monthly` | first trading day, with 8:45 | `reports.build_monthly` | Volatility calendar: RBI, Fed, US & India data, expiries, results, holidays, rated HIGH / MEDIUM / LOW |
 
-> The scheduled pre-market report runs at **8:15 AM**, not 8:45. That's
-> `chain.py`'s `SLOTS`, and the site reads the actual time from each snapshot.
+Setup status on the site (Watch → Triggered → Active → Completed / Stopped)
+replays live 5-min candles through `planner.evaluate_plan`, ported line for
+line to `src/lib/track.ts` and checked against the Python on 72 cases.
+
+## Live prices on Vercel
+
+Yahoo answers Vercel's Node runtime with HTTP 429. `api/yf.py` is a small
+Python function on the same deployment that fetches Yahoo's chart JSON with
+`curl_cffi` impersonating Chrome (the same thing `yfinance` does for the
+bot). `src/lib/market.ts` calls it in one batched request; locally it calls
+Yahoo directly. Optional for local dev: `python3 api/yf.py` and
+`YF_BRIDGE_URL=http://127.0.0.1:5328/api/yf npm run dev`.
 
 ## Deploy (Neon + Vercel)
 
@@ -75,12 +88,7 @@ Next.js on Vercel.
 3. **GitHub secrets** on the bot repo (Settings → Secrets → Actions):
    * `WEB_INGEST_URL` = `https://<your-app>.vercel.app/api/ingest`
    * `WEB_INGEST_TOKEN` = the same value as `INGEST_TOKEN`
-4. **Backfill** the history the engine already has (the last AI report and
-   every PCR / VIX / max pain / FII-DII row in `signals.db`):
-   ```bash
-   WEB_INGEST_URL=https://<app>.vercel.app/api/ingest WEB_INGEST_TOKEN=... python tools/backfill_web.py
-   ```
-5. Check `https://<app>.vercel.app/api/health`. It runs a live query against
+4. Check `https://<app>.vercel.app/api/health`. It runs a live query against
    Neon and reports the snapshot and metric counts and applied migrations.
 
 Schema changes go in a new `db/migrations/000N_*.sql` file. Run
@@ -125,15 +133,11 @@ The site shows these as "not published" rather than inventing them. To fill
 one, add the field in `modules/publish.py`, add it to `src/lib/types.ts`, and
 render it.
 
-* Break-above / break-below **scenario triggers** and a **no-trade zone**. The
-  AI report gives bull/range/bear probabilities and levels only.
-* **Macro calendar** (RBI, Fed, CPI, GDP, PMI, jobs).
 * News **category, sentiment, impact, related instruments**.
 * FII/DII **futures and options** split (cash only today).
 * Breadth: **new highs/lows** and **% above 20/50/200 EMA**.
 * **Sector constituents** for drill-down.
-* **Index technical indicators** (RSI, MACD, VWAP, EMAs for Nifty). The screener
-  computes these for shortlisted stocks only, and they're shown on those setups.
+* Plans for anything beyond **NIFTY 50 and BANK NIFTY** (other instruments show live prices only).
 
 ## Stack
 

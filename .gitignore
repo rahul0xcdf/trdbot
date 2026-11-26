@@ -19,3 +19,5 @@ data/*.csv
 # OS
 .DS_Store
 Thumbs.db
+# website payloads written by DRY_RUN=1 (modules/publish.py)
+data/web/

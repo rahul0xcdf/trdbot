@@ -131,16 +131,14 @@ export function BreadthBar({ label, adv, dec, total }: { label: string; adv: num
 }
 
 export function Breadth({ snaps }: { snaps: (Snapshot | undefined)[] }) {
-  const board = snaps.find((s) => s?.data.indices?.["NIFTY 50"]?.advances !== undefined)?.data.indices;
+  const board = snaps.find((s) => s?.data?.board?.["NIFTY 50"]?.advances !== undefined)?.data.board;
   const bank = board?.["NIFTY BANK"];
-  const fno = snaps.find((s) => s?.data.breadth)?.data.breadth;
   const n = board?.["NIFTY 50"];
-  if (!n && !fno) return <p className="px-4 pb-5 text-sm text-dim sm:px-5">No breadth data published.</p>;
+  if (!n) return <p className="px-4 pb-5 text-sm text-dim sm:px-5">No breadth data published.</p>;
   return (
     <div className="space-y-4 px-4 pb-5 sm:px-5">
       {n?.advances !== undefined ? <BreadthBar label="Nifty 50" adv={n.advances ?? 0} dec={n.declines ?? 0} total={50} /> : null}
       {bank?.advances ? <BreadthBar label="Bank Nifty" adv={bank.advances ?? 0} dec={bank.declines ?? 0} total={12} /> : null}
-      {fno ? <BreadthBar label={`${fno.universe} (${fno.total} stocks)`} adv={fno.advances} dec={fno.declines} total={fno.total} /> : null}
       <p className="text-2xs text-dim">New highs / lows and % above 20/50/200 EMA aren&apos;t in the engine&apos;s output.</p>
     </div>
   );

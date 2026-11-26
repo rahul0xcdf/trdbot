@@ -1,18 +1,18 @@
 "use client";
 import Link from "next/link";
-import { AlertTriangle, ChevronDown, ExternalLink } from "lucide-react";
-import { useState } from "react";
-import { type EngineBias, SESSION_LABEL, SESSION_SCHEDULE } from "@/lib/derive";
-import { dayIST, isoDateIST, timeIST } from "@/lib/format";
-import type { Session, Snapshot, SnapshotMeta, TerminalState } from "@/lib/types";
-import { BiasChip, Chip, Empty, Meter, Panel, PanelHead, Tag, clsx } from "../ui";
+import { AlertTriangle, ExternalLink } from "lucide-react";
+import { INDEX_LABEL, SESSION_LABEL, SESSION_SCHEDULE, SESSION_SHORT } from "@/lib/derive";
+import { dayIST, isoDateIST, num, timeIST } from "@/lib/format";
+import type { Bias, IndexKey, Session, Snapshot, SnapshotMeta, TerminalState } from "@/lib/types";
+import { INDEX_KEYS } from "@/lib/types";
+import { BiasChip, Chip, Empty, Panel, PanelHead, Tag, clsx } from "../ui";
 
-/* ── Analysis provenance line ────────────────────────────────────────────── */
+/* ── Provenance line ─────────────────────────────────────────────────────── */
 
 export function AnalysisStamp({ snap, prefix }: { snap: Snapshot; prefix?: string }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5 text-2xs text-dim">
-      <Tag kind="engine">{snap.source?.ai_model && snap.analysis ? snap.source.ai_model : undefined}</Tag>
+      <Tag kind="engine">rules</Tag>
       <Link href={`/history/${snap.id}`} className="hover:text-ink-2">
         {prefix ?? SESSION_LABEL[snap.session]} · <span className="num text-ink-2">{timeIST(snap.generated_at)}</span> {dayIST(snap.generated_at)}
       </Link>
@@ -20,176 +20,191 @@ export function AnalysisStamp({ snap, prefix }: { snap: Snapshot; prefix?: strin
   );
 }
 
-/* ── Outlook: the engine's bias + probabilities (AI pre-market report) ───── */
+const rupees = (x: number | null | undefined) => (x == null ? "—" : `₹${Math.round(x).toLocaleString("en-IN")}`);
 
-const REC_TONE: Record<string, "up" | "accent" | "down" | "neutral"> = { GO: "up", CAUTION: "accent", WARNING: "down", STAY_OUT: "down" };
+function actionTone(a: string | null | undefined): "up" | "down" | "accent" | "neutral" {
+  const s = (a ?? "").toUpperCase();
+  if (s.startsWith("NO TRADE") || s.startsWith("EXIT")) return "down";
+  if (s.startsWith("ENTER") || s.startsWith("HOLD") || s.startsWith("BOOK")) return "up";
+  if (s.startsWith("WAIT")) return "accent";
+  return "neutral";
+}
 
-export function Outlook({ bias, compact = false }: { bias: EngineBias | null; compact?: boolean }) {
-  if (!bias)
+export function ActionChip({ action, size = "md" }: { action: string | null | undefined; size?: "md" | "lg" }) {
+  if (!action) return <Chip>—</Chip>;
+  return (
+    <Chip tone={actionTone(action)} className={size === "lg" ? "px-3 py-1 text-xs" : undefined}>
+      {action}
+    </Chip>
+  );
+}
+
+/* ── TRADE DECISION (planner.decide → reports._decision_block) ──────────── */
+
+export function DecisionCard({ snap, planDay, compact = false }: { snap: Snapshot | null; planDay?: { day: string; isToday: boolean } | null; compact?: boolean }) {
+  if (!snap?.decision)
     return (
       <Panel>
-        <PanelHead title="Engine outlook" right={<Tag kind="engine" />} />
-        <Empty title="No AI pre-market report yet">
-          Bias, probabilities and trade setups come from the engine&apos;s <code className="num">/premarket</code> report (premarket.generate). The scheduled 8:15 / 2:00 / 6:00 reports
-          publish data and an AI note, but no bias.
+        <PanelHead title="Trade decision" right={<Tag kind="engine" />} />
+        <Empty title="No plan published yet">
+          The engine sends its plan at 8:45 AM, re-plans at 11:45 AM and sets tomorrow&apos;s plan at 6:00 PM. It appears here the moment a report lands.
         </Empty>
       </Panel>
     );
-  const { probs } = bias;
-  const total = (probs.bullish ?? 0) + (probs.rangebound ?? 0) + (probs.bearish ?? 0) || 1;
-  const a = bias.snap.analysis?.kind === "ai_premarket" ? bias.snap.analysis : null;
+  const d = snap.decision;
+  const best = d.best ? snap.indices?.[d.best.index]?.plan?.[d.best.side] : null;
+  const o = best?.option;
+  const forDay = snap.plan_for ? dayIST(snap.plan_for + "T12:00:00+05:30") : null;
+  const title =
+    snap.session !== "evening"
+      ? "Trade decision"
+      : planDay
+        ? planDay.isToday
+          ? "Trade decision · for today (set last evening)"
+          : "Trade decision · for tomorrow"
+        : `Trade decision · for ${forDay ?? "the next session"}`;
   return (
     <Panel>
-      <PanelHead title="Engine outlook" right={<AnalysisStamp snap={bias.snap} prefix="AI pre-market report" />} />
-      {!bias.current ? (
+      <PanelHead title={title} right={<AnalysisStamp snap={snap} />} />
+      {planDay && !planDay.isToday ? (
         <div className="flex items-center gap-2 border-b border-line bg-raised px-4 py-2 text-xs text-ink-2">
           <AlertTriangle className="size-3.5 text-accent" />
-          From {dayIST(bias.snap.generated_at)} — no AI report for today yet.
+          Plan for {dayIST(planDay.day + "T12:00:00+05:30")} — the next session, not today.
         </div>
       ) : null}
-      <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+      <div className="grid grid-cols-1 gap-x-6 gap-y-4 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <BiasChip bias={bias.sentiment} size="lg" />
-            {bias.recommendation ? <Chip tone={REC_TONE[bias.recommendation] ?? "neutral"}>{bias.recommendation.replace("_", " ")}</Chip> : null}
+            <ActionChip action={d.action} size="lg" />
+            <Chip tone={d.confidence === "High" ? "up" : d.confidence === "Medium" ? "accent" : "neutral"}>Confidence {d.confidence}</Chip>
           </div>
-          {bias.confidence !== null ? (
-            <div>
-              <div className="mb-1 flex justify-between text-2xs text-dim">
-                <span>Confidence</span>
-                <span className="num text-ink-2">{bias.confidence}/100</span>
-              </div>
-              <Meter value={bias.confidence} tone="accent" />
-            </div>
-          ) : null}
-          {probs.bullish !== null ? (
-            <div>
-              <div className="mb-1.5 flex h-2 overflow-hidden rounded-full">
-                <div className="bg-up" style={{ width: `${((probs.bullish ?? 0) / total) * 100}%` }} />
-                <div className="bg-ink-2/50" style={{ width: `${((probs.rangebound ?? 0) / total) * 100}%` }} />
-                <div className="bg-down" style={{ width: `${((probs.bearish ?? 0) / total) * 100}%` }} />
-              </div>
-              <div className="flex justify-between text-2xs">
-                <span className="text-up">Bullish <span className="num">{probs.bullish}%</span></span>
-                <span className="text-ink-2">Range <span className="num">{probs.rangebound}%</span></span>
-                <span className="text-down">Bearish <span className="num">{probs.bearish}%</span></span>
-              </div>
-            </div>
-          ) : null}
-          {bias.plan?.style ? (
-            <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-              <p className="text-2xs tracking-[0.08em] text-dim uppercase">Trading plan</p>
-              <p className="text-sm text-ink">{bias.plan.style}</p>
-              {bias.plan.why && !compact ? <p className="mt-0.5 text-xs text-ink-2">{bias.plan.why}</p> : null}
-            </div>
-          ) : null}
+          <dl className="divide-y divide-line">
+            <Row k="Market bias" v={<BiasChip bias={d.market_bias} />} />
+            <Row k="Best index" v={d.best ? INDEX_LABEL[d.best.index] : "—"} />
+            <Row k="Best setup" v={d.best?.name ?? "none"} wrap />
+            {d.secondary ? <Row k="Secondary" v={d.secondary.name ?? "—"} wrap /> : null}
+          </dl>
         </div>
-        <div className="space-y-3 text-sm">
-          {bias.noTrade ? (
-            <p className="rounded-lg border border-[#e58c7a40] bg-down-muted px-3 py-2 text-down">No trade — {bias.noTradeReason}</p>
+        <div className="space-y-3">
+          {best && o ? (
+            <dl className="divide-y divide-line rounded-xl border border-line px-3">
+              <Row k="Option" v={`${o.name} (${o.label}, Δ≈${Math.abs(o.delta_at_trigger).toFixed(2)})`} wrap />
+              <Row k="Stop loss" v={`${num(best.stop, 0)} on the index (≈ ₹${o.premiums.stop})`} />
+              <Row k="Target" v={`T1 ${num(best.t1, 0)} / T2 ${num(best.t2, 0)} (≈ ₹${o.premiums.t1} / ₹${o.premiums.t2})`} wrap />
+              <Row k="Risk / reward" v={`1:${best.rr1} (T1) · 1:${best.rr2} (T2)`} />
+              <Row k="Position size" v={`${o.size.lots} lot (${o.size.lots * o.lot} qty) · risk ≈ ${rupees(o.size.risk_total)}`} wrap />
+            </dl>
+          ) : (
+            <p className="rounded-xl border border-line bg-bg-sunk px-3 py-2.5 text-sm text-ink-2">No setup passes every filter — position size 0.</p>
+          )}
+          {best?.confirm && !compact ? (
+            <p className="text-xs leading-relaxed text-ink-2">
+              <span className="text-dim">Entry confirmation: </span>
+              {best.confirm}
+            </p>
           ) : null}
-          {bias.why ? <p className="leading-relaxed text-ink-2">{bias.why}</p> : null}
-          {a?.sector_outlook && !compact ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              {(a.sector_outlook.bullish_sectors ?? []).map((s) => (
-                <Chip key={s} tone="up">{s}</Chip>
-              ))}
-              {(a.sector_outlook.bearish_sectors ?? []).map((s) => (
-                <Chip key={s} tone="down">{s}</Chip>
-              ))}
-            </div>
+          {d.reason ? (
+            <p className={clsx("rounded-lg px-3 py-2 text-xs", d.conflict ? "border border-[#e58c7a40] bg-down-muted text-down" : "bg-raised text-ink-2")}>
+              <span className="text-dim">Why: </span>
+              {d.reason}
+            </p>
           ) : null}
-          <p className="text-2xs text-dim">The engine publishes probabilities and levels, not break-above / break-below triggers — the levels it named are on the ladder.</p>
+          {!compact
+            ? d.size_blocked.map((b, i) => (
+                <p key={i} className="text-2xs text-dim">
+                  The {INDEX_LABEL[b.index]} {b.side === "bull" ? "bullish" : "bearish"} setup is otherwise valid, but 1 lot risks ≈ {rupees(b.size.risk_per_lot)} — above your
+                  per-trade limit ({rupees(b.size.budget)}).
+                </p>
+              ))
+            : null}
+          {snap.account?.capital_is_default && !compact ? (
+            <p className="text-2xs text-dim">Sizing assumes ₹1,00,000 capital — set the TRADING_CAPITAL repo variable to yours.</p>
+          ) : null}
         </div>
       </div>
-      {a && !compact && ((a.alerts?.length ?? 0) > 0 || (a.risk_assessment?.length ?? 0) > 0) ? <AlertsRisks alerts={a.alerts ?? []} risks={a.risk_assessment ?? []} /> : null}
     </Panel>
   );
 }
 
-function AlertsRisks({ alerts, risks }: { alerts: string[]; risks: string[] }) {
-  const [open, setOpen] = useState(false);
+function Row({ k, v, wrap }: { k: string; v: React.ReactNode; wrap?: boolean }) {
   return (
-    <div className="border-t border-line">
-      <button onClick={() => setOpen((o) => !o)} className="press flex w-full items-center justify-between px-4 py-2.5 text-xs text-ink-2 hover:text-ink">
-        <span>
-          Alerts <span className="num text-dim">{alerts.length}</span> · Risks <span className="num text-dim">{risks.length}</span>
-        </span>
-        <ChevronDown className={clsx("size-4 transition-transform", open && "rotate-180")} />
-      </button>
-      {open ? (
-        <div className="grid grid-cols-1 gap-4 px-4 pb-4 sm:grid-cols-2">
-          <List title="Alerts" items={alerts} />
-          <List title="Risk assessment" items={risks} />
+    <div className={clsx("flex justify-between gap-3 py-2 text-sm", wrap ? "items-start" : "items-center")}>
+      <dt className="shrink-0 text-dim">{k}</dt>
+      <dd className={clsx("text-right text-ink", !wrap && "num")}>{v}</dd>
+    </div>
+  );
+}
+
+/* ── Per-index bias (planner.score_bias) ─────────────────────────────────── */
+
+export function BiasList({ snap }: { snap: Snapshot }) {
+  const rows = INDEX_KEYS.map((k) => [k, snap.indices?.[k]?.plan?.bias] as [IndexKey, Bias | null | undefined]).filter(([, b]) => b);
+  if (!rows.length) return null;
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {rows.map(([k, b]) => (
+        <div key={k} className="rounded-xl border border-line bg-bg-sunk px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-ink-2">{INDEX_LABEL[k]}</span>
+            <span className="flex items-center gap-1.5">
+              <span className="num text-2xs text-dim">score {b!.score > 0 ? "+" : ""}{b!.score}</span>
+              <BiasChip bias={b!.bias} />
+            </span>
+          </div>
+          {b!.why.length ? (
+            <ul className="mt-1.5 space-y-0.5">
+              {b!.why.map((w, i) => (
+                <li key={i} className="num text-2xs text-dim">{w}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1.5 text-2xs text-dim">no strong factor</p>
+          )}
         </div>
-      ) : null}
+      ))}
     </div>
   );
 }
 
-function List({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div>
-      <p className="eyebrow mb-1.5">{title}</p>
-      <ul className="space-y-1.5 text-sm text-ink-2">
-        {items.map((t, i) => (
-          <li key={i} className="flex gap-2">
-            <span className="mt-2 size-1 shrink-0 rounded-full bg-dim" />
-            {t}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+/* ── AI narration (ai_engine.narrate) ────────────────────────────────────── */
 
-/* ── Brief: the AI note of the latest scheduled report + rule-based reads ── */
+const AI_TITLES: Record<string, string> = {
+  global_read: "Global & Indian factors",
+  nifty_read: "NIFTY 50",
+  banknifty_read: "BANK NIFTY",
+  beginner_tip: "Tip for today",
+  what_is_happening: "What is happening now?",
+  after_12: "What is likely after 12 PM?",
+  nifty_story: "NIFTY 50 today",
+  banknifty_story: "BANK NIFTY today",
+  tomorrow: "What today tells us about tomorrow",
+  lesson: "Trading lesson",
+  month_note: "This month",
+};
 
-export function Brief({ snap, title }: { snap: Snapshot | null; title?: string }) {
-  if (!snap) return null;
-  const a = snap.analysis?.kind === "brief" ? snap.analysis : null;
-  const labels = snap.data.labels;
-  const chain = snap.data.option_chains?.NIFTY;
+export function AiNotes({ snap, keys, title = "In plain words" }: { snap: Snapshot; keys?: string[]; title?: string }) {
+  const ai = snap.ai ?? {};
+  const items = (keys ?? Object.keys(ai)).filter((k) => ai[k]);
+  if (!items.length) return null;
   return (
     <Panel>
-      <PanelHead title={title ?? a?.title ?? SESSION_LABEL[snap.session]} right={<AnalysisStamp snap={snap} />} />
+      <PanelHead title={title} right={<Tag kind="engine">{snap.source?.ai_model ?? "AI narration"}</Tag>} />
       <div className="space-y-3 p-4">
-        {a?.bullets?.length ? (
-          <ul className="space-y-2">
-            {a.bullets.map((b, i) => (
-              <li key={i} className="flex gap-2.5 text-sm leading-relaxed text-ink">
-                <span className="num mt-0.5 text-2xs text-accent">{String(i + 1).padStart(2, "0")}</span>
-                {b}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-dim">AI note unavailable for this run — the engine sent the data without it.</p>
-        )}
-        {labels || chain?.oi_signal ? (
-          <div className="flex flex-wrap gap-1.5 border-t border-line pt-3">
-            {labels?.opening_hint ? <Read k="Opening">{labels.opening_hint}</Read> : null}
-            {labels?.nifty_pcr ? <Read k={`Nifty PCR ${chain?.pcr ?? ""}`}>{labels.nifty_pcr}</Read> : null}
-            {labels?.banknifty_pcr ? <Read k={`Bank Nifty PCR ${snap.data.option_chains?.BANKNIFTY?.pcr ?? ""}`}>{labels.banknifty_pcr}</Read> : null}
-            {labels?.pcr_mix ? <Read k="PCR mix">{labels.pcr_mix}</Read> : null}
-            {chain?.oi_signal ? <Read k="Nifty ΔOI">{chain.oi_signal}</Read> : null}
+        {items.map((k) => (
+          <div key={k}>
+            <p className="eyebrow mb-1">{AI_TITLES[k] ?? k}</p>
+            <p className="text-sm leading-relaxed text-ink">{ai[k]}</p>
           </div>
-        ) : null}
+        ))}
+        <p className="border-t border-line pt-3 text-2xs text-dim">
+          Gemini only explains the engine&apos;s numbers in words. Every level, trigger, stop, target and size above comes from the fixed rules in planner.py.
+        </p>
       </div>
     </Panel>
   );
 }
 
-function Read({ k, children }: { k: string; children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-lg border border-accent-line/60 bg-accent-muted/60 px-2 py-1 text-xs">
-      <span className="text-dim">{k}</span>
-      <span className="text-ink">{children}</span>
-    </span>
-  );
-}
-
-/* ── Session timeline: 6 PM → 8:15 AM → 9:15 open → 2 PM → 6 PM ─────────── */
+/* ── Session timeline: 6 PM → 8:45 → 9:15 open → 11:45 → 3:30 close → 6 PM ── */
 
 interface Step {
   key: string;
@@ -203,30 +218,27 @@ interface Step {
 export function SessionTimeline({ state }: { state: TerminalState }) {
   const now = new Date(state.server_time);
   const today = isoDateIST(now);
-  const mins = (() => {
-    const d = new Date(now.getTime() + 330 * 60_000);
-    return d.getUTCHours() * 60 + d.getUTCMinutes();
-  })();
-  const find = (session: Session, day?: string) =>
-    state.timeline.find((m) => m.session === session && (!day || isoDateIST(m.generated_at) === day));
-  // Most recent evening before today's morning
-  const evening = state.timeline.find((m) => m.session === "evening" && isoDateIST(m.generated_at) < today) ?? find("evening");
+  const ist = new Date(now.getTime() + 330 * 60_000);
+  const mins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  const weekday = ist.getUTCDay() !== 0 && ist.getUTCDay() !== 6;
+  const find = (session: Session, day?: string) => state.timeline.find((m) => m.session === session && (!day || isoDateIST(m.generated_at) === day));
+  const evening = state.timeline.find((m) => m.session === "evening" && isoDateIST(m.generated_at) < today);
   const pre = find("premarket", today);
-  const ai = find("ai_premarket", today);
-  const aft = find("afternoon", today);
+  const mid = find("midday", today);
   const eveToday = find("evening", today);
-  const due = (hhmm: string) => {
-    const [h, m] = hhmm.split(":").map(Number);
-    return mins >= h * 60 + m + 5;
+  const due = (s: Session) => {
+    const [h, m] = (SESSION_SCHEDULE[s] ?? "23:59").split(":").map(Number);
+    return weekday && mins >= h * 60 + m + 10;
   };
-  const st = (meta: SnapshotMeta | undefined, hhmm: string): Step["state"] => (meta ? "done" : due(hhmm) ? "missed" : "pending");
+  const st = (meta: SnapshotMeta | undefined, s: Session): Step["state"] => (meta ? "done" : due(s) ? "missed" : "pending");
+  const live = weekday && mins >= 555 && mins < 930;
   const steps: Step[] = [
-    { key: "eve", time: evening ? timeIST(evening.generated_at) : "06:00 PM", label: "Next-day prep", meta: evening, state: evening ? "done" : "pending" },
-    { key: "pre", time: pre ? timeIST(pre.generated_at) : "08:15 AM", label: "Pre-market", meta: pre, state: st(pre, SESSION_SCHEDULE.premarket!) },
-    ...(ai ? [{ key: "ai", time: timeIST(ai.generated_at), label: "AI report", meta: ai, state: "done" as const }] : []),
-    { key: "open", time: "09:15 AM", label: "Market open", marker: true, state: mins >= 555 && mins < 930 ? "live" : mins >= 930 ? "done" : "pending" },
-    { key: "aft", time: aft ? timeIST(aft.generated_at) : "02:00 PM", label: "Intraday update", meta: aft, state: st(aft, SESSION_SCHEDULE.afternoon!) },
-    { key: "eve2", time: eveToday ? timeIST(eveToday.generated_at) : "06:00 PM", label: "Evening wrap", meta: eveToday, state: st(eveToday, SESSION_SCHEDULE.evening!) },
+    { key: "eve", time: evening ? timeIST(evening.generated_at) : "06:00 PM", label: "Tomorrow's plan", meta: evening, state: evening ? "done" : "pending" },
+    { key: "pre", time: pre ? timeIST(pre.generated_at) : "08:45 AM", label: "Pre-market plan", meta: pre, state: st(pre, "premarket") },
+    { key: "open", time: "09:15 AM", label: "Market open", marker: true, state: live ? "live" : weekday && mins >= 930 ? "done" : "pending" },
+    { key: "mid", time: mid ? timeIST(mid.generated_at) : "11:45 AM", label: "Midday re-plan", meta: mid, state: st(mid, "midday") },
+    { key: "close", time: "03:30 PM", label: "Market close", marker: true, state: weekday && mins >= 930 ? "done" : "pending" },
+    { key: "eve2", time: eveToday ? timeIST(eveToday.generated_at) : "06:00 PM", label: "Evening wrap", meta: eveToday, state: st(eveToday, "evening") },
   ];
   return (
     <div className="rail -mx-1 gap-1 px-1">
@@ -261,7 +273,7 @@ export function SessionTimeline({ state }: { state: TerminalState }) {
         return (
           <div key={s.key} className="flex items-center gap-1">
             {s.meta ? (
-              <Link href={`/history/${s.meta.id}`} className="block h-full press">
+              <Link href={`/history/${s.meta.id}`} className="press block h-full">
                 {inner}
               </Link>
             ) : (
@@ -278,12 +290,7 @@ export function SessionTimeline({ state }: { state: TerminalState }) {
 export function SnapshotLink({ snap }: { snap: Snapshot }) {
   return (
     <Link href={`/history/${snap.id}`} className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
-      Open full snapshot <ExternalLink className="size-3" />
+      Open the full {SESSION_SHORT[snap.session]} report <ExternalLink className="size-3" />
     </Link>
   );
 }
-
-export function latestAnalysisList(state: TerminalState, n = 5) {
-  return state.timeline.slice(0, n);
-}
-

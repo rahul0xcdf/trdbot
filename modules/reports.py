@@ -635,7 +635,11 @@ def build_premarket() -> tuple[str, dict]:
     save_day_plan(now, plans)
     nifty_chain = (g["snaps"]["NIFTY"]["chain"] or {}).get("summary")
     return "\n".join(lines), {"nifty_chain": nifty_chain, "vix": g["vix_row"], "fii_dii": fii,
-                              "plans": plans, "decision": dec}
+                              "plans": plans, "decision": dec,
+                              # for modules/publish.py (website) — the same objects, no new numbers
+                              "web": {"g": g, "plans": plans, "biases": biases, "decision": dec, "ai": ai,
+                                      "acct": acct, "gift": gift, "cues": cues, "headlines": headlines,
+                                      "events_today": cal_today}}
 
 
 # ── 11:45 AM — Midday ─────────────────────────────────────────────────────────
@@ -744,7 +748,7 @@ def build_midday() -> tuple[str, dict]:
         msg = (f"<b>🕚 11:45 AM MIDDAY REPORT</b>\n<i>{_now_label(now)}</i>\n\n"
                "Today's intraday data is not available (market closed or data feed down). "
                "No assessment — <b>NO TRADE</b> on missing data.\n\n" + DISCLAIMER)
-        return msg, {}
+        return msg, {"web": {"g": g, "unavailable": "today's intraday data is not available"}}
     dec = planner.decide(plans, biases, g["vix"], "live", actions)
     if dec.get("best"):
         dec["action"] = actions.get(dec["best"][1], dec["action"])
@@ -814,7 +818,9 @@ def build_midday() -> tuple[str, dict]:
                  f"square off intraday options by {planner.SQUARE_OFF_BY}.</i>")
     lines += _decision_block(dec, acct)
     lines += ["", DISCLAIMER]
-    return "\n".join(lines), {"decision": dec}
+    return "\n".join(lines), {"decision": dec,
+                              "web": {"g": g, "mids": mids, "biases": biases, "decision": dec, "ai": ai,
+                                      "acct": acct}}
 
 
 # ── 6:00 PM — Daily wrap ──────────────────────────────────────────────────────
@@ -950,7 +956,14 @@ def build_evening(days_ahead: int = 7) -> tuple[str, dict]:
     lines += ["", DISCLAIMER]
 
     nifty_chain = (g["snaps"]["NIFTY"]["chain"] or {}).get("summary")
-    return "\n".join(lines), {"nifty_chain": nifty_chain, "vix": g["vix_row"], "fii_dii": g["fii"]}
+    return "\n".join(lines), {"nifty_chain": nifty_chain, "vix": g["vix_row"], "fii_dii": g["fii"],
+                              "web": {"g": g, "eods": eods, "biases": biases, "decision": dec, "ai": ai,
+                                      "acct": acct, "cues": cues, "headlines": headlines,
+                                      "movers": {"NIFTY": movers, "BANKNIFTY": bank_movers},
+                                      "sector_momentum": dict(zip(("building", "fading"),
+                                                                  _momentum_sectors(g["sectors"]))),
+                                      "upcoming": events, "holidays": holidays, "days_ahead": days_ahead,
+                                      "expiries": {"NIFTY": nifty_exp, "BANKNIFTY": bank_exp}}}
 
 
 # ── Monthly event calendar ────────────────────────────────────────────────────
@@ -997,7 +1010,8 @@ def build_monthly(year: int | None = None, month: int | None = None) -> tuple[st
     lines += ["", "<i>Sources: NSE (expiries, holidays, results), data/macro_calendar.json (RBI, Fed, BLS, MoSPI "
               "schedules), and usual-release-day rules for the rest. Dates can change — check the official "
               "calendars the day before.</i>"]
-    return "\n".join(lines), {"events": events}
+    return "\n".join(lines), {"events": events,
+                              "web": {"events": events, "ai": ai, "month": f"{year}-{month:02d}"}}
 
 
 # ── Back-compat name ──────────────────────────────────────────────────────────

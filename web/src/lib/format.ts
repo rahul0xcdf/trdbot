@@ -92,9 +92,11 @@ export function isoDateIST(v: string | number | Date = new Date()): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-/** NSE "26-Nov-2026" or "26-Nov-2026 08:10" → Date (IST midnight / time) */
+/** NSE "26-Nov-2026" / "26-Nov-2026 08:10", or ISO "2026-11-26" → Date (IST midnight / time) */
 export function parseNseDate(s: string | null | undefined): Date | null {
   if (!s) return null;
+  const iso = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), -5, -30));
   const m = s.trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
   if (!m) return null;
   const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];

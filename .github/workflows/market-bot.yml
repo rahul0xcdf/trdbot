@@ -99,6 +99,10 @@ jobs:
           NIFTY_LOT:           ${{ vars.NIFTY_LOT }}
           BANKNIFTY_LOT:       ${{ vars.BANKNIFTY_LOT }}
           COSTS_PER_LOT:       ${{ vars.COSTS_PER_LOT }}
+          # Website (web/ on Vercel): each report is also POSTed there as JSON.
+          # Unset = Telegram only. Publishing never blocks the Telegram send.
+          WEB_INGEST_URL:      ${{ secrets.WEB_INGEST_URL }}
+          WEB_INGEST_TOKEN:    ${{ secrets.WEB_INGEST_TOKEN }}
           GEMINI_MODEL: >-
             ${{
               github.event.inputs.model ||

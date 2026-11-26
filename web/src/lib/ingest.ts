@@ -7,17 +7,23 @@ import { z } from "zod";
 import { snapshotId } from "./derive";
 import type { MetricRow, Snapshot } from "./types";
 
-const SessionZ = z.enum(["premarket", "afternoon", "evening", "ai_premarket"]);
+const SessionZ = z.enum(["premarket", "midday", "evening", "monthly"]);
 
 export const SnapshotIn = z.object({
-  schema_version: z.number().int().min(1),
+  // v1 came from the old AI engine; only the rules-based engine (v2) is accepted now.
+  schema_version: z.number().int().min(2, "schema_version 2+ (rules-based engine) required"),
   session: SessionZ,
   generated_at: z.string().refine((s) => !Number.isNaN(Date.parse(s)), "generated_at must be an ISO time"),
   trade_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  plan_for: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   market_status: z.string().nullable().optional(),
   source: z.record(z.string(), z.any()).optional(),
   data: z.record(z.string(), z.any()),
-  analysis: z.record(z.string(), z.any()).nullable().optional(),
+  indices: z.partialRecord(z.enum(["NIFTY", "BANKNIFTY"]), z.record(z.string(), z.any())).optional(),
+  decision: z.record(z.string(), z.any()).nullable().optional(),
+  account: z.record(z.string(), z.any()).nullable().optional(),
+  ai: z.record(z.string(), z.string()).nullable().optional(),
+  note: z.string().nullable().optional(),
   telegram_html: z.string().max(60_000).nullable().optional(),
 });
 
@@ -43,10 +49,15 @@ export function toSnapshot(p: z.infer<typeof SnapshotIn>): Snapshot {
     session: p.session,
     generated_at: p.generated_at,
     trade_date: p.trade_date ?? null,
+    plan_for: p.plan_for ?? null,
     market_status: p.market_status ?? null,
     source: p.source as Snapshot["source"],
     data: p.data as Snapshot["data"],
-    analysis: (p.analysis ?? null) as Snapshot["analysis"],
+    indices: (p.indices ?? {}) as Snapshot["indices"],
+    decision: (p.decision ?? null) as Snapshot["decision"],
+    account: (p.account ?? null) as Snapshot["account"],
+    ai: p.ai ?? null,
+    note: p.note ?? null,
     telegram_html: p.telegram_html ?? null,
     received_at: new Date().toISOString(),
   };

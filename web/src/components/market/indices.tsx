@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
-import { latestWith } from "@/lib/derive";
+import { indexLast, latestWith } from "@/lib/derive";
 import { num, pct, tone } from "@/lib/format";
 import type { Instrument } from "@/lib/instruments";
 import type { Quote, TerminalState } from "@/lib/types";
@@ -27,11 +27,31 @@ export interface IndexValue {
  */
 export function indexValue(inst: Instrument, quote: Quote | undefined, state: TerminalState): IndexValue {
   const eng = inst.engineIndex
-    ? latestWith(state, (s) => s.data.indices?.[inst.engineIndex!])
+    ? latestWith(state, (s) => s.data?.board?.[inst.engineIndex!])
     : inst.engineSector
-      ? latestWith(state, (s) => s.data.sectors?.find((x) => x.sector === inst.engineSector))
+      ? latestWith(state, (s) => s.data?.sectors?.find((x) => x.sector === inst.engineSector))
       : null;
   const engRow = eng?.value as { last?: number | null; change?: number | null; change_pct?: number | null; week_pct?: number | null; high?: number | null; low?: number | null } | undefined;
+  // NIFTY / BANKNIFTY: if NSE's board isn't in the payload, use the engine's own read of the index
+  if (!engRow?.last && inst.chain) {
+    const ix = latestWith(state, (s) => (indexLast(s.indices?.[inst.chain!]) != null ? s.indices[inst.chain!] : null));
+    if (ix && (!quote || quote.price === null)) {
+      const r = ix.value;
+      const last = indexLast(r);
+      const prev = r.intraday ? r.prev?.close ?? null : r.today ? r.today.prev_close : r.prev?.prev_close ?? null;
+      return {
+        price: last,
+        change: last != null && prev ? last - prev : null,
+        change_pct: last != null && prev ? ((last - prev) / prev) * 100 : null,
+        week_pct: null,
+        time: ix.snap.generated_at,
+        source: "NSE via engine",
+        spark: [],
+        prevClose: prev,
+        viaEngine: true,
+      };
+    }
+  }
   if (quote && quote.price !== null) {
     return {
       price: quote.price,

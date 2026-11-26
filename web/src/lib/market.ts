@@ -5,6 +5,7 @@
  */
 import "server-only";
 import { isDemo } from "./store";
+import { demoFixtureCandles } from "@/demo";
 import type { Candle, CandleSeries, Quote } from "./types";
 import type { Instrument } from "./instruments";
 
@@ -31,9 +32,33 @@ interface YahooChart {
   };
 }
 
-async function yahoo(symbol: string, range: string, interval: string, revalidate: number): Promise<YahooChart> {
+type ChartResult = NonNullable<NonNullable<YahooChart["chart"]>["result"]>[number];
+type Fetched = { ok: true; res: ChartResult } | { ok: false; error: string };
+
+/** The Python bridge (api/yf.py) used on Vercel, where Yahoo refuses Node. */
+function bridge(): { url: string; headers: Record<string, string> } | null {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (process.env.INGEST_TOKEN) headers.Authorization = `Bearer ${process.env.INGEST_TOKEN}`;
+  if (process.env.YF_BRIDGE_URL) return { url: process.env.YF_BRIDGE_URL, headers };
+  if (!process.env.VERCEL) return null;
+  const prod = process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const host = prod || process.env.VERCEL_URL;
+  if (!host) return null;
+  // Preview URLs sit behind Vercel Authentication; this secret lets the
+  // server call itself when "Protection Bypass for Automation" is on.
+  if (process.env.VERCEL_AUTOMATION_BYPASS_SECRET) headers["x-vercel-protection-bypass"] = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  return { url: `https://${host}/api/yf`, headers };
+}
+
+function unpack(j: YahooChart | undefined): Fetched {
+  const res = j?.chart?.result?.[0];
+  if (res) return { ok: true, res };
+  return { ok: false, error: j?.chart?.error?.description ?? "no data" };
+}
+
+async function direct(symbol: string, range: string, interval: string, revalidate: number): Promise<Fetched> {
   const qs = `range=${range}&interval=${interval}&includePrePost=false`;
-  let last: unknown;
+  let last = "no response";
   for (const host of ["query1", "query2"]) {
     try {
       const r = await fetch(`https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?${qs}`, {
@@ -41,16 +66,68 @@ async function yahoo(symbol: string, range: string, interval: string, revalidate
         next: { revalidate },
         signal: AbortSignal.timeout(8000),
       });
+      if (r.status === 404) return unpack((await r.json().catch(() => undefined)) as YahooChart | undefined);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return (await r.json()) as YahooChart;
+      return unpack((await r.json()) as YahooChart);
     } catch (e) {
-      last = e;
+      last = (e as Error).message;
     }
   }
-  throw last instanceof Error ? last : new Error(String(last));
+  return { ok: false, error: last };
 }
 
-function toCandles(res: NonNullable<NonNullable<YahooChart["chart"]>["result"]>[number]): Candle[] {
+/**
+ * Fetch Yahoo charts for several symbols at once. On Vercel this goes through
+ * the Python bridge in one request (Yahoo answers Node with HTTP 429 there);
+ * locally it calls Yahoo directly. Anything the first route can't get is
+ * retried on the other.
+ */
+async function yahooMany(symbols: string[], range: string, interval: string, revalidate: number): Promise<Map<string, Fetched>> {
+  const out = new Map<string, Fetched>();
+  const b = bridge();
+  const viaBridge = async (syms: string[]) => {
+    if (!b || !syms.length) return;
+    for (let i = 0; i < syms.length; i += 20) {
+      const chunk = syms.slice(i, i + 20);
+      const url = `${b.url}?s=${chunk.map(encodeURIComponent).join(",")}&range=${range}&interval=${interval}`;
+      try {
+        const r = await fetch(url, { headers: b.headers, next: { revalidate }, signal: AbortSignal.timeout(15000) });
+        if (!r.ok) throw new Error(`bridge HTTP ${r.status}`);
+        const j = (await r.json()) as { results: Record<string, { status: number; data?: YahooChart; error?: string }> };
+        for (const s of chunk) {
+          const x = j.results?.[s];
+          if (!x) out.set(s, { ok: false, error: "bridge: no result" });
+          else if (x.data) out.set(s, unpack(x.data));
+          else out.set(s, { ok: false, error: x.error ?? `HTTP ${x.status}` });
+        }
+      } catch (e) {
+        for (const s of chunk) out.set(s, { ok: false, error: (e as Error).message });
+      }
+    }
+  };
+  const viaDirect = async (syms: string[]) => {
+    const got = await Promise.all(syms.map((s) => direct(s, range, interval, revalidate)));
+    syms.forEach((s, i) => {
+      const prev = out.get(s);
+      // keep the more informative error if both routes fail
+      if (got[i].ok || !prev) out.set(s, got[i]);
+    });
+  };
+  const errorOf = (s: string) => { const f = out.get(s); return f && !f.ok ? f.error : null; };
+  const failed = () => symbols.filter((s) => !out.get(s)?.ok);
+  if (b && process.env.VERCEL) {
+    await viaBridge(symbols);
+    // "no data" means Yahoo answered (unknown symbol); don't retry those
+    const left = failed().filter((s) => errorOf(s) !== "no data");
+    if (left.length) await viaDirect(left);
+  } else {
+    await viaDirect(symbols);
+    if (b) await viaBridge(failed());
+  }
+  return out;
+}
+
+function toCandles(res: ChartResult): Candle[] {
   const ts = res.timestamp ?? [];
   const q = res.indicators.quote[0];
   const out: Candle[] = [];
@@ -62,16 +139,18 @@ function toCandles(res: NonNullable<NonNullable<YahooChart["chart"]>["result"]>[
   return out;
 }
 
-export async function getQuote(inst: Instrument): Promise<Quote> {
-  if (isDemo()) return demoQuote(inst);
-  try {
-    const j = await yahoo(inst.yahoo, "1d", "5m", 30);
-    const res = j.chart?.result?.[0];
-    if (!res) throw new Error(j.chart?.error?.description ?? "no data");
-    const m = res.meta;
+export async function getQuotes(insts: Instrument[]): Promise<Quote[]> {
+  if (isDemo()) return insts.map(demoQuote);
+  const got = await yahooMany([...new Set(insts.map((i) => i.yahoo))], "1d", "5m", 30);
+  return insts.map((inst) => {
+    const f = got.get(inst.yahoo) ?? { ok: false as const, error: "no data" };
+    if (!f.ok) {
+      return { symbol: inst.key, name: inst.name, price: null, prev_close: null, change: null, change_pct: null, time: null, spark: [], source: SOURCE, error: f.error };
+    }
+    const m = f.res.meta;
     const price = m.regularMarketPrice ?? null;
     const prev = m.chartPreviousClose ?? m.previousClose ?? null;
-    const candles = toCandles(res);
+    const candles = toCandles(f.res);
     return {
       symbol: inst.key,
       name: inst.name,
@@ -85,23 +164,19 @@ export async function getQuote(inst: Instrument): Promise<Quote> {
       spark: candles.map((c) => c.close),
       source: SOURCE,
     };
-  } catch (e) {
-    return { symbol: inst.key, name: inst.name, price: null, prev_close: null, change: null, change_pct: null, time: null, spark: [], source: SOURCE, error: (e as Error).message };
-  }
+  });
+}
+
+export async function getQuote(inst: Instrument): Promise<Quote> {
+  return (await getQuotes([inst]))[0];
 }
 
 export async function getCandles(inst: Instrument, range: string, interval: string): Promise<CandleSeries> {
   if (isDemo()) return demoCandles(inst, range, interval);
-  try {
-    const j = await yahoo(inst.yahoo, range, interval, interval === "1d" ? 600 : 30);
-    const res = j.chart?.result?.[0];
-    if (!res) throw new Error(j.chart?.error?.description ?? "no data");
-    const candles = toCandles(res);
-    const t = res.meta.regularMarketTime;
-    return { symbol: inst.key, interval, range, candles, updated: t ? new Date(t * 1000).toISOString() : null, source: SOURCE };
-  } catch (e) {
-    return { symbol: inst.key, interval, range, candles: [], updated: null, source: SOURCE, error: (e as Error).message };
-  }
+  const f = (await yahooMany([inst.yahoo], range, interval, interval === "1d" ? 600 : 30)).get(inst.yahoo);
+  if (!f?.ok) return { symbol: inst.key, interval, range, candles: [], updated: null, source: SOURCE, error: f?.error ?? "no data" };
+  const t = f.res.meta.regularMarketTime;
+  return { symbol: inst.key, interval, range, candles: toCandles(f.res), updated: t ? new Date(t * 1000).toISOString() : null, source: SOURCE };
 }
 
 /* ── Demo: deterministic synthetic prices (DEMO_MODE=1 only) ─────────────── */
@@ -195,7 +270,30 @@ function demoDaily(key: string, days: number, now = new Date()): Candle[] {
   return out;
 }
 
+const istDay = (t: number) => new Date((t + 19800) * 1000).toISOString().slice(0, 10);
+
 function demoQuote(inst: Instrument): Quote {
+  const fx = demoFixtureCandles(inst.key, "5m");
+  if (fx?.length) {
+    // NIFTY / BANKNIFTY: the synthetic market the demo reports were built on
+    const last = istDay(fx.at(-1)!.time);
+    const bars = fx.filter((c) => istDay(c.time) === last);
+    const prevBars = fx.filter((c) => istDay(c.time) < last);
+    const price = bars.at(-1)!.close;
+    const prev = prevBars.at(-1)?.close ?? null;
+    return {
+      symbol: inst.key,
+      name: inst.name,
+      price,
+      prev_close: prev,
+      change: prev !== null ? price - prev : null,
+      change_pct: prev ? ((price - prev) / prev) * 100 : null,
+      time: new Date((bars.at(-1)!.time + 300) * 1000).toISOString(),
+      spark: bars.map((c) => c.close),
+      source: "Synthetic (demo)",
+      demo: true,
+    };
+  }
   const b = DEMO_BASE[inst.key];
   const bars = demoIntraday(inst.key);
   const price = bars.at(-1)?.close ?? b?.prev ?? null;
@@ -215,6 +313,12 @@ function demoQuote(inst: Instrument): Quote {
 }
 
 function demoCandles(inst: Instrument, range: string, interval: string): CandleSeries {
+  const fx = demoFixtureCandles(inst.key, interval);
+  if (fx) {
+    const last = fx.length ? istDay(fx.at(-1)!.time) : null;
+    const candles = range === "1d" && interval !== "1d" ? fx.filter((c) => istDay(c.time) === last) : fx;
+    return { symbol: inst.key, interval, range, candles, updated: new Date().toISOString(), source: "Synthetic (demo)", demo: true };
+  }
   let candles: Candle[];
   if (interval === "1d") candles = demoDaily(inst.key, range === "1y" ? 250 : range === "6mo" ? 125 : 22);
   else if (range === "1d") candles = demoIntraday(inst.key);

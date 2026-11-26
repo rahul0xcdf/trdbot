@@ -19,20 +19,20 @@ import { Fresh, Segmented, Tag, clsx } from "../ui";
 
 const IST = 19800; // lightweight-charts renders UTC; shift so the axis reads IST
 
-const LINE: Record<Level["kind"], { color: string; style: LineStyle; width: 1 | 2 }> = {
-  resistance: { color: "#e58c7a", style: LineStyle.Dashed, width: 1 },
-  support: { color: "#9cc29a", style: LineStyle.Dashed, width: 1 },
-  max_pain: { color: "#a9b8c9", style: LineStyle.Dotted, width: 1 },
-  entry: { color: "#e0a95b", style: LineStyle.Solid, width: 1 },
-  stop: { color: "#e58c7a", style: LineStyle.Solid, width: 2 },
+const LINE: Record<Level["role"], { color: string; style: LineStyle; width: 1 | 2 }> = {
+  trigger: { color: "#e0a95b", style: LineStyle.Solid, width: 2 },
+  stop: { color: "#e58c7a", style: LineStyle.Solid, width: 1 },
   target: { color: "#9cc29a", style: LineStyle.Solid, width: 1 },
+  zone: { color: "#8b8b8866", style: LineStyle.Dashed, width: 1 },
 };
 
+/** Short axis label: "Bull ▲", "Bear SL", "PDH"… (the engine's own names). */
 function short(l: Level): string {
-  if (l.kind === "max_pain") return "Max pain";
-  if (l.kind === "resistance") return l.rank ? `R${l.rank}` : "R";
-  if (l.kind === "support") return l.rank ? `S${l.rank}` : "S";
-  return l.label;
+  if (l.role === "zone") return l.names[0] ?? "";
+  const s = l.side === "bull" ? "Bull" : "Bear";
+  if (l.role === "trigger") return `${s} trigger`;
+  if (l.role === "stop") return `${s} SL`;
+  return l.label.replace(/^(Bull|Bear) /, `${s} `);
 }
 
 export const TFS = ["1D", "5D", "1M", "6M", "1Y"] as const;
@@ -132,9 +132,9 @@ export function PriceChart({
     lines.current = [];
     if (!showLevels) return;
     levels.forEach((l) => {
-      const st = LINE[l.kind];
+      const st = LINE[l.role];
       lines.current.push(
-        s.createPriceLine({ price: l.price, color: st.color, lineWidth: st.width, lineStyle: st.style, axisLabelVisible: true, title: short(l) }),
+        s.createPriceLine({ price: l.price, color: st.color, lineWidth: st.width, lineStyle: st.style, axisLabelVisible: l.role !== "zone", title: short(l) }),
       );
     });
   }, [levels, showLevels, data]);
@@ -184,7 +184,7 @@ export function PriceChart({
               <p className="mt-1 text-xs text-dim">
                 {data?.error ? `Yahoo Finance: ${data.error}. ` : ""}
                 {tf === "1D" ? "Intraday bars appear once the market opens (9:15 AM IST). " : ""}
-                Engine levels are still listed in the ladder.
+                The plan's levels are still listed in the ladder.
               </p>
             </div>
           </div>
@@ -192,13 +192,11 @@ export function PriceChart({
       </div>
       {levels.length && showLevels ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3.5 py-2 text-2xs text-dim sm:px-4">
-          <Legend color="#e58c7a" dash>Resistance (call OI / AI)</Legend>
-          <Legend color="#9cc29a" dash>Support (put OI / AI)</Legend>
-          {levels.some((l) => l.kind === "max_pain") ? <Legend color="#a9b8c9" dot>Max pain</Legend> : null}
-          {levels.some((l) => l.kind === "entry") ? <Legend color="#e0a95b">Entry</Legend> : null}
-          {levels.some((l) => l.kind === "stop") ? <Legend color="#e58c7a">Stop</Legend> : null}
-          {levels.some((l) => l.kind === "target") ? <Legend color="#9cc29a">Targets</Legend> : null}
-          <span className="ml-auto"><Tag kind="engine">levels</Tag></span>
+          <Legend color="#e0a95b">Trigger (15-min close + retest)</Legend>
+          <Legend color="#e58c7a">Stop</Legend>
+          <Legend color="#9cc29a">Targets</Legend>
+          {levels.some((l) => l.role === "zone") ? <Legend color="#8b8b88" dash>Other engine levels</Legend> : null}
+          <span className="ml-auto"><Tag kind="engine">plan levels</Tag></span>
         </div>
       ) : null}
     </div>

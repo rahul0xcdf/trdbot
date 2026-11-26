@@ -3,7 +3,7 @@ import type { Session } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const SESSIONS = new Set(["premarket", "afternoon", "evening", "ai_premarket"]);
+const SESSIONS = new Set(["premarket", "midday", "evening", "monthly"]);
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** GET /api/snapshots?session=&from=YYYY-MM-DD&to=YYYY-MM-DD&limit= */

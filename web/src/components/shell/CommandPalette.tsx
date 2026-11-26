@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Drawer } from "vaul";
 import { ArrowUpRight, FileText, Search, Star, Target } from "lucide-react";
 import { useWatchlist } from "@/lib/client";
-import { SESSION_SHORT, latestWith, opportunities } from "@/lib/derive";
+import { SESSION_SHORT, activePlan, latestWith, scenarioTitle, setupsOf } from "@/lib/derive";
+import { num } from "@/lib/format";
 import { dayIST, timeIST } from "@/lib/format";
 import { ALL } from "@/lib/instruments";
 import type { TerminalState } from "@/lib/types";
@@ -23,8 +24,8 @@ export function CommandPalette({ open, onOpenChange, state }: { open: boolean; o
     if (!open) setQ("");
   }, [open]);
 
-  const setups = useMemo(() => opportunities(state.latest.ai_premarket), [state]);
-  const news = useMemo(() => latestWith(state, (s) => s.data.news)?.value ?? [], [state]);
+  const setups = useMemo(() => setupsOf(activePlan(state, new Date(state.server_time))?.snap).filter((x) => x.sc.entry != null), [state]);
+  const news = useMemo(() => latestWith(state, (s) => s.data?.news)?.value ?? [], [state]);
   const go = (href: string) => {
     onOpenChange(false);
     if (href.startsWith("http")) window.open(href, "_blank", "noopener");
@@ -32,7 +33,7 @@ export function CommandPalette({ open, onOpenChange, state }: { open: boolean; o
   };
   const sym = q.trim().toUpperCase().replace(/[^A-Z0-9&_-]/g, "");
   // Offer "open <SYMBOL>" only when nothing we already know matches the query.
-  const known = sym.length >= 2 && (ALL.some((i) => `${i.key} ${i.name}`.toUpperCase().includes(sym)) || setups.some((o) => o.symbol.includes(sym)));
+  const known = sym.length >= 2 && (ALL.some((i) => `${i.key} ${i.name}`.toUpperCase().includes(sym)) || setups.some((o) => o.key.includes(sym)));
 
   return (
     <Drawer.Root open={open} onOpenChange={onOpenChange} direction="top">
@@ -68,13 +69,18 @@ export function CommandPalette({ open, onOpenChange, state }: { open: boolean; o
                 </Command.Group>
               ) : null}
               {setups.length ? (
-                <Command.Group heading="Today's setups (engine)" className={group}>
+                <Command.Group heading="Plan scenarios (engine)" className={group}>
                   {setups.map((o) => (
-                    <Command.Item key={o.symbol + o.side} value={`setup ${o.symbol} ${o.side} ${o.suggested_strike}`} onSelect={() => go(`/setups#${o.symbol}`)} className={item}>
+                    <Command.Item
+                      key={o.key + o.side}
+                      value={`setup ${o.key} ${o.label} ${o.side} ${o.sc.option?.name ?? ""}`}
+                      onSelect={() => go(`/setups#${o.key}-${o.side}`)}
+                      className={item}
+                    >
                       <Target className="size-4 text-accent" />
-                      <span className="font-medium text-ink">{o.symbol}</span>
-                      <span className={o.side === "CALL" ? "text-up" : "text-down"}>{o.side}</span>
-                      <span className="ml-auto text-xs text-dim">{o.suggested_strike}</span>
+                      <span className="font-medium text-ink">{o.label}</span>
+                      <span className={o.side === "bull" ? "text-up" : "text-down"}>{scenarioTitle(o.plan.kind, o.side, o.sc)}</span>
+                      <span className="num ml-auto text-xs text-dim">{num(o.sc.entry, 0)}</span>
                     </Command.Item>
                   ))}
                 </Command.Group>

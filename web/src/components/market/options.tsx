@@ -2,8 +2,66 @@
 import { useMemo, useState } from "react";
 import { daysUntil } from "@/lib/derive";
 import { compact, num } from "@/lib/format";
-import type { OptionChain, StrikeRow } from "@/lib/types";
+import type { IndexChain, StrikeRow } from "@/lib/types";
 import { Chip, Segmented, clsx } from "../ui";
+
+/** Flat view of the engine's chain (reports._chain_for → publish._chain). */
+export interface OptionChain {
+  expiry: string; // the expiry the strikes belong to (the one the plan trades)
+  summaryExpiry: string | null; // nearest expiry — where PCR / OI walls / max pain come from
+  dte: number | null;
+  expiryNote: string | null;
+  spot: number;
+  pcr: number | null;
+  max_pain: number | null;
+  atm_strike: number;
+  atm_iv: number | null;
+  total_call_oi: number | null;
+  total_put_oi: number | null;
+  change_call_oi: number | null;
+  change_put_oi: number | null;
+  oi_signal: string | null;
+  top_call_oi_strikes: number[];
+  top_put_oi_strikes: number[];
+  strikes: StrikeRow[];
+}
+
+export function chainView(ic: IndexChain | null | undefined): OptionChain | null {
+  if (!ic) return null;
+  const s = ic.summary ?? ({} as NonNullable<IndexChain["summary"]>);
+  const spot = ic.spot ?? s.spot ?? null;
+  const strikes = ic.strikes ?? [];
+  if (spot == null && !strikes.length) return null;
+  // ATM as NSE reports it; if absent, the listed strike nearest spot (display centring only)
+  const atm =
+    s.atm_strike ??
+    (strikes.length && spot != null ? strikes.reduce((a, r) => (Math.abs(r.strike - spot) < Math.abs(a - spot) ? r.strike : a), strikes[0].strike) : 0);
+  return {
+    expiry: ic.expiry ?? "",
+    summaryExpiry: ic.summary_expiry ?? null,
+    dte: ic.dte ?? null,
+    expiryNote: ic.expiry_note ?? null,
+    spot: spot ?? 0,
+    pcr: s.pcr ?? null,
+    max_pain: s.max_pain ?? null,
+    atm_strike: atm,
+    atm_iv: s.atm_iv ?? null,
+    total_call_oi: s.total_call_oi ?? null,
+    total_put_oi: s.total_put_oi ?? null,
+    change_call_oi: s.change_call_oi ?? null,
+    change_put_oi: s.change_put_oi ?? null,
+    oi_signal: s.oi_signal ?? null,
+    top_call_oi_strikes: s.top_call_oi_strikes ?? [],
+    top_put_oi_strikes: s.top_put_oi_strikes ?? [],
+    strikes,
+  };
+}
+
+const dmy = (iso: string | null | undefined) => {
+  if (!iso) return "—";
+  const d = new Date(iso + "T12:00:00+05:30");
+  return Number.isNaN(+d) ? iso : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", timeZone: "Asia/Kolkata" });
+};
 
 /* ── Summary tiles ───────────────────────────────────────────────────────── */
 
@@ -16,17 +74,22 @@ export function ChainSummary({ c, label }: { c: OptionChain; label?: string }) {
     ["ATM IV", c.atm_iv !== null ? `${num(c.atm_iv, 2)}%` : "—"],
     ["Call OI", compact(c.total_call_oi)],
     ["Put OI", compact(c.total_put_oi)],
-    ["Δ Call OI", compact(c.change_call_oi), c.change_call_oi >= 0 ? "text-down" : "text-up"],
-    ["Δ Put OI", compact(c.change_put_oi), c.change_put_oi >= 0 ? "text-up" : "text-down"],
+    ["Δ Call OI", compact(c.change_call_oi), (c.change_call_oi ?? 0) >= 0 ? "text-down" : "text-up"],
+    ["Δ Put OI", compact(c.change_put_oi), (c.change_put_oi ?? 0) >= 0 ? "text-up" : "text-down"],
   ];
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-xs text-dim">
         {label ? <span className="text-sm font-medium text-ink">{label}</span> : null}
         <span>
-          Expiry <span className="text-ink-2">{c.expiry}</span>
+          Strikes: expiry <span className="text-ink-2">{dmy(c.expiry)}</span>
           {dte !== null ? <span> · {dte === 0 ? "today" : `${dte}d`}</span> : null}
         </span>
+        {c.summaryExpiry && c.summaryExpiry !== c.expiry ? (
+          <span>
+            PCR / walls: nearest expiry <span className="text-ink-2">{dmy(c.summaryExpiry)}</span>
+          </span>
+        ) : null}
         <span>
           Spot <span className="num text-ink-2">{num(c.spot)}</span>
         </span>
@@ -42,12 +105,12 @@ export function ChainSummary({ c, label }: { c: OptionChain; label?: string }) {
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         <span className="rounded-lg border border-accent-line/60 bg-accent-muted/60 px-2 py-1">
           <span className="text-dim">ΔOI read </span>
-          <span className="text-ink">{c.oi_signal}</span>
+          <span className="text-ink">{c.oi_signal ?? "n/a"}</span>
         </span>
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <StrikeRowChips title="High call OI → resistance" strikes={c.top_call_oi_strikes} tone="down" />
-        <StrikeRowChips title="High put OI → support" strikes={c.top_put_oi_strikes} tone="up" />
+        <StrikeRowChips title="Call-OI wall (engine level)" strikes={c.top_call_oi_strikes} tone="down" />
+        <StrikeRowChips title="Put-OI wall (engine level)" strikes={c.top_put_oi_strikes} tone="up" />
       </div>
     </div>
   );
@@ -117,7 +180,7 @@ export function OiProfile({ c, width = 10 }: { c: OptionChain; width?: number })
           );
         })}
       </div>
-      <p className="mt-2 text-2xs text-dim">Highlighted bar = engine&apos;s top-3 OI strike · MP = max pain · shaded row = ATM. {metric === "chg" ? "Faded bars are OI unwinding." : ""}</p>
+      <p className="mt-2 text-2xs text-dim">Highlighted bar = OI wall the engine uses · MP = max pain · shaded row = ATM. {metric === "chg" ? "Faded bars are OI unwinding." : ""}</p>
     </div>
   );
 }

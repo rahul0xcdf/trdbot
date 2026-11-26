@@ -2,25 +2,27 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useQuotes, useWatchlist } from "@/lib/client";
-import { SCHEDULED, engineLevels, latestWith, opportunities, setupLevels } from "@/lib/derive";
+import { SCHEDULED, activePlan, latestWith, planLevels, setupsOf } from "@/lib/derive";
 import { dayIST, num, timeIST } from "@/lib/format";
 import { INDIA, resolveInstrument } from "@/lib/instruments";
 import { useTerminalState } from "../shell/context";
 import { Breadth, FiiDiiCard, MetricLine, MoversList } from "../market/breadth";
 import { indexValue, SourceLine } from "../market/indices";
 import { LevelLadder } from "../market/levels";
-import { ChainSummary } from "../market/options";
+import { ChainSummary, chainView } from "../market/options";
 import { PriceChart } from "../market/PriceChart";
 import { QuoteRow } from "../market/quotes";
-import { CandidateIndicators, SetupCard } from "../market/setups";
+import { SetupCard } from "../market/setups";
+import { AnalysisStamp } from "../market/engine";
+import { IndexRead } from "../market/read";
 import { Chip, Delta, Empty, Fresh, Kv, Live, PageHeader, Panel, PanelHead, Tag } from "../ui";
 
 export function MarketsView() {
   const state = useTerminalState();
   const india = useQuotes({ group: "india" });
-  const fii = latestWith(state, (s) => s.data.fii_dii, SCHEDULED);
-  const movers = latestWith(state, (s) => s.data.movers, SCHEDULED);
-  const snaps = [state.latest.afternoon, state.latest.premarket, state.latest.evening, state.latest.ai_premarket];
+  const fii = latestWith(state, (s) => s.data?.fii_dii, SCHEDULED);
+  const movers = latestWith(state, (s) => s.data?.movers, SCHEDULED);
+  const snaps = [state.latest.midday, state.latest.premarket, state.latest.evening];
   return (
     <>
       <PageHeader kicker="Markets" title="Indian markets" right={<Fresh at={india.fetchedAt} label="Prices" />}>
@@ -53,7 +55,7 @@ export function MarketsView() {
         </Panel>
         <Panel id="flows">
           <PanelHead title="FII / DII" right={<Tag kind="raw">NSE via engine</Tag>} />
-          <FiiDiiCard f={fii?.value} history={state.metrics} />
+          <FiiDiiCard f={fii?.value ?? undefined} history={state.metrics} />
         </Panel>
         <Panel>
           <PanelHead title="Breadth" right={<Tag kind="raw">NSE via engine</Tag>} />
@@ -65,12 +67,12 @@ export function MarketsView() {
           {movers?.value.BANKNIFTY ? <MoversList movers={movers.value.BANKNIFTY} title="Bank Nifty" /> : null}
         </Panel>
         <Panel>
-          <PanelHead title="Derivatives history" sub="Daily, as logged by the engine (signals.db + evening reports)" right={<Tag kind="raw" />} />
+          <PanelHead title="Derivatives history" sub="Daily, from the engine's evening reports" right={<Tag kind="raw" />} />
           <div className="grid gap-2 px-4 pb-4 sm:px-5">
             <MetricLine rows={state.metrics} field="pcr" label="Nifty PCR" />
             <MetricLine rows={state.metrics} field="vix" label="India VIX" />
             <MetricLine rows={state.metrics} field="max_pain" label="Nifty max pain" decimals={0} />
-            {state.metrics.length < 2 ? <p className="text-sm text-dim">Not enough history yet — run tools/backfill_web.py once.</p> : null}
+            {state.metrics.length < 2 ? <p className="text-sm text-dim">Builds up one point per evening report.</p> : null}
           </div>
         </Panel>
       </div>
@@ -86,15 +88,12 @@ export function InstrumentView({ symbol }: { symbol: string }) {
   const { map } = useQuotes({ keys: [inst.key] });
   const { keys, add, remove } = useWatchlist();
   const v = indexValue(inst, map.get(inst.key), state);
-  const ai = state.latest.ai_premarket;
-  const setup = opportunities(ai).find((o) => o.symbol === inst.key);
-  const candidate = ai?.data.candidates?.[inst.key];
-  const levels = useMemo(
-    () => (inst.chain ? engineLevels(state, inst.chain) : setup && ai ? setupLevels(setup, ai) : []),
-    [state, inst.chain, setup, ai],
-  );
-  const chain = inst.chain ? latestWith(state, (s) => s.data.option_chains?.[inst.chain!]) : null;
-  const engRow = inst.engineIndex ? latestWith(state, (s) => s.data.indices?.[inst.engineIndex!], SCHEDULED) : null;
+  const ap = activePlan(state, new Date(state.server_time));
+  const plan = inst.chain ? ap?.snap.indices?.[inst.chain]?.plan : null;
+  const levels = useMemo(() => planLevels(plan), [plan]);
+  const items = setupsOf(ap?.snap).filter((x) => x.key === inst.chain);
+  const chain = inst.chain ? latestWith(state, (s) => (s.indices?.[inst.chain!]?.chain?.strikes?.length ? s.indices[inst.chain!]!.chain : null)) : null;
+  const read = inst.chain ? latestWith(state, (s) => s.indices?.[inst.chain!], SCHEDULED) : null;
   const watching = keys.includes(inst.key);
   return (
     <>
@@ -121,54 +120,40 @@ export function InstrumentView({ symbol }: { symbol: string }) {
           <PriceChart instrumentKey={inst.key} levels={levels} height={440} />
         </Panel>
         <Panel>
-          <PanelHead title={inst.chain ? "Engine levels" : setup ? "Setup levels" : "Levels"} right={levels.length ? <Tag kind="engine" /> : null} />
+          <PanelHead title="Plan levels" right={ap && levels.length ? <AnalysisStamp snap={ap.snap} /> : null} />
           {levels.length ? (
-            <LevelLadder levels={levels} price={v.price} />
+            <LevelLadder levels={levels} price={v.price} source={ap ? { id: ap.snap.id, session: ap.snap.session, time: ap.snap.generated_at } : null} />
           ) : (
-            <Empty title="Your engine hasn't published levels for this instrument.">
-              Levels exist for Nifty and Bank Nifty (option chain + AI report) and for stocks with a setup in today&apos;s AI report.
+            <Empty title={inst.chain ? "No plan published yet." : "Your engine doesn't plan this instrument."}>
+              The engine builds levels and scenarios for NIFTY 50 and BANK NIFTY only.
             </Empty>
           )}
         </Panel>
-        {setup && ai ? (
-          <div className="lg:col-span-2">
-            <SetupCard op={setup} snap={ai} candidate={candidate} expanded />
+        {items.map((it) => (
+          <div key={it.side} className="lg:col-span-1">
+            <SetupCard item={it} />
           </div>
-        ) : null}
-        {candidate && !setup ? (
-          <Panel>
-            <PanelHead title="Screener snapshot" />
-            <div className="px-4 pb-4 sm:px-5">
-              <CandidateIndicators c={candidate} />
+        ))}
+        {read ? (
+          <Panel className="lg:col-span-2">
+            <PanelHead title="Engine read" right={<AnalysisStamp snap={read.snap} />} />
+            <div className="px-4 pb-5 sm:px-5">
+              <IndexRead snap={read.snap} ix={read.value} />
             </div>
           </Panel>
         ) : null}
-        {chain ? (
+        {chain && chainView(chain.value) ? (
           <Panel className="lg:col-span-2">
             <PanelHead title="Option chain" href="/options" right={<Tag kind="raw">NSE via engine · {timeIST(chain.snap.generated_at)}</Tag>} />
             <div className="px-4 pb-5 sm:px-5">
-              <ChainSummary c={chain.value} />
+              <ChainSummary c={chainView(chain.value)!} />
             </div>
           </Panel>
         ) : null}
-        {engRow ? (
-          <Panel>
-            <PanelHead title="Last session" sub={`${engRow.snap.trade_date ?? "—"} · captured ${dayIST(engRow.snap.generated_at)} ${timeIST(engRow.snap.generated_at)}`} right={<Tag kind="raw">NSE via engine</Tag>} />
-            <dl className="divide-y divide-line px-4 pb-3 sm:px-5">
-              <Kv k="Open" v={num(engRow.value.open)} />
-              <Kv k="High" v={num(engRow.value.high)} />
-              <Kv k="Low" v={num(engRow.value.low)} />
-              <Kv k="Close / last" v={num(engRow.value.last)} />
-              <Kv k="Prev close" v={num(engRow.value.prev_close)} />
-              <Kv k="1-week" v={<Delta pctValue={engRow.value.week_pct ?? null} showAbs={false} />} />
-              {engRow.value.advances ? <Kv k="Advances / declines" v={`${engRow.value.advances} / ${engRow.value.declines}`} /> : null}
-            </dl>
-          </Panel>
-        ) : null}
-        {inst.group === "stock" && !setup && !candidate ? (
+        {inst.group === "stock" ? (
           <Panel className="lg:col-span-3">
-            <Empty title={`No engine analysis for ${inst.key} today`} className="pt-5">
-              <Chip>Prices only</Chip> The engine analyses stocks it shortlists in the AI pre-market report.
+            <Empty title={`No engine analysis for ${inst.key}`} className="pt-5">
+              <Chip>Prices only</Chip> The engine plans NIFTY 50 and BANK NIFTY; other instruments show live prices only.
             </Empty>
           </Panel>
         ) : null}

@@ -24,7 +24,7 @@ Modules do the real work; this file just wires them together.
 import os
 import sys
 
-from modules import nse_data, telegram, signals, commands, config, reports
+from modules import nse_data, telegram, signals, commands, config, reports, publish
 from modules.market_data import WATCHLIST_INDIA
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -211,8 +211,9 @@ def _first_trading_day_of_month() -> bool:
 
 def flow_premarket():
     """8:45 AM — pre-market trade plan (+ the monthly calendar on day 1)."""
-    message, _ = reports.build_premarket()
+    message, data = reports.build_premarket()
     _send(message)
+    publish.publish_report("premarket", message, data)
     try:
         if _first_trading_day_of_month():
             flow_monthly()
@@ -222,20 +223,23 @@ def flow_premarket():
 
 def flow_midday():
     """11:45 AM — reassess with the morning's real price action."""
-    message, _ = reports.build_midday()
+    message, data = reports.build_midday()
     _send(message)
+    publish.publish_report("midday", message, data)
 
 
 def flow_monthly():
     """Monthly volatility event calendar."""
-    message, _ = reports.build_monthly()
+    message, data = reports.build_monthly()
     _send(message)
+    publish.publish_report("monthly", message, data)
 
 
 def flow_evening():
     """6:00 PM — full daily wrap + tomorrow's plan."""
     message, data = reports.build_evening()
     _send(message)
+    publish.publish_report("evening", message, data)
     if not DRY_RUN:
         _log_snapshot(data)
 
