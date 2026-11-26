@@ -1,0 +1,225 @@
+{
+ "schema_version": 1,
+ "session": "afternoon",
+ "generated_at": "2026-11-26T13:37:08+05:30",
+ "trade_date": "2026-11-25",
+ "market_status": "Market Closed",
+ "source": {
+  "engine": "trdbot",
+  "ai_model": "gemini-2.5-flash"
+ },
+ "data": {
+  "indices": {
+   "NIFTY 50": {
+    "last": 25873.45,
+    "change": 145.2,
+    "change_pct": 0.56,
+    "open": 25760.1,
+    "high": 25902.8,
+    "low": 25731.0,
+    "prev_close": 25728.25,
+    "advances": 33,
+    "declines": 17,
+    "week_pct": 1.12
+   },
+   "NIFTY BANK": {
+    "last": 58912.3,
+    "change": 402.15,
+    "change_pct": 0.69,
+    "open": 58540.0,
+    "high": 58990.5,
+    "low": 58480.2,
+    "prev_close": 58510.15,
+    "advances": 9,
+    "declines": 3,
+    "week_pct": 1.48
+   },
+   "INDIA VIX": {
+    "last": 11.42,
+    "change": -0.38,
+    "change_pct": -3.22,
+    "open": 11.8,
+    "high": 11.95,
+    "low": 11.3,
+    "prev_close": 11.8,
+    "advances": 0,
+    "declines": 0,
+    "week_pct": -6.1
+   },
+   "SENSEX": {
+    "last": 84912.6,
+    "change": 431.8,
+    "change_pct": 0.51,
+    "high": 85020.1,
+    "low": 84470.3,
+    "date": "25-Nov-2026"
+   }
+  },
+  "sectors": [
+   {
+    "sector": "Metal",
+    "last": 9812.6,
+    "change_pct": 1.64,
+    "week_pct": 3.2
+   },
+   {
+    "sector": "IT",
+    "last": 37210.4,
+    "change_pct": 1.21,
+    "week_pct": 2.6
+   },
+   {
+    "sector": "PSU Bank",
+    "last": 7920.1,
+    "change_pct": 1.05,
+    "week_pct": 2.1
+   },
+   {
+    "sector": "Auto",
+    "last": 26840.7,
+    "change_pct": 0.88,
+    "week_pct": 1.9
+   },
+   {
+    "sector": "Financial Services",
+    "last": 27410.6,
+    "change_pct": 0.74,
+    "week_pct": 1.6
+   },
+   {
+    "sector": "Bank",
+    "last": 58912.3,
+    "change_pct": 0.69,
+    "week_pct": 1.48
+   },
+   {
+    "sector": "Private Bank",
+    "last": 28640.2,
+    "change_pct": 0.58,
+    "week_pct": 1.2
+   },
+   {
+    "sector": "Infrastructure",
+    "last": 9510.8,
+    "change_pct": 0.31,
+    "week_pct": 0.8
+   },
+   {
+    "sector": "FMCG",
+    "last": 55120.9,
+    "change_pct": 0.12,
+    "week_pct": -0.4
+   },
+   {
+    "sector": "Consumer Durables",
+    "last": 38120.4,
+    "change_pct": -0.09,
+    "week_pct": -0.6
+   },
+   {
+    "sector": "Energy",
+    "last": 36901.5,
+    "change_pct": -0.21,
+    "week_pct": 0.3
+   },
+   {
+    "sector": "Oil & Gas",
+    "last": 11980.2,
+    "change_pct": -0.28,
+    "week_pct": 0.2
+   },
+   {
+    "sector": "Healthcare",
+    "last": 14820.5,
+    "change_pct": -0.37,
+    "week_pct": -0.9
+   },
+   {
+    "sector": "Pharma",
+    "last": 22410.2,
+    "change_pct": -0.42,
+    "week_pct": -1.1
+   },
+   {
+    "sector": "Media",
+    "last": 1622.4,
+    "change_pct": -0.65,
+    "week_pct": -1.9
+   },
+   {
+    "sector": "Realty",
+    "last": 948.3,
+    "change_pct": -1.18,
+    "week_pct": -2.4
+   }
+  ],
+  "movers": {
+   "NIFTY": {
+    "gainers": [
+     {
+      "symbol": "TATASTEEL",
+      "ltp": 168.4,
+      "change_pct": 3.12
+     },
+     {
+      "symbol": "INFY",
+      "ltp": 1921.5,
+      "change_pct": 2.41
+     },
+     {
+      "symbol": "HINDALCO",
+      "ltp": 712.2,
+      "change_pct": 2.05
+     }
+    ],
+    "losers": [
+     {
+      "symbol": "SUNPHARMA",
+      "ltp": 1702.1,
+      "change_pct": -1.44
+     },
+     {
+      "symbol": "DLF",
+      "ltp": 812.6,
+      "change_pct": -1.21
+     },
+     {
+      "symbol": "ITC",
+      "ltp": 412.3,
+      "change_pct": -0.82
+     }
+    ]
+   }
+  },
+  "news": [
+   {
+    "title": "US CPI cools to 2.6%, Treasury yields slip",
+    "source": "Livemint",
+    "published": "2026-11-26T02:02:00+00:00",
+    "link": "https://www.livemint.com/markets/example-cpi"
+   },
+   {
+    "title": "FPIs turn net sellers for third session as dollar firms",
+    "source": "Economic Times",
+    "published": "2026-11-26T01:20:00+00:00",
+    "link": "https://economictimes.indiatimes.com/markets/example-fpi"
+   },
+   {
+    "title": "Metal stocks extend rally on China stimulus hopes",
+    "source": "Moneycontrol",
+    "published": "2026-11-25T11:40:00+00:00",
+    "link": "https://www.moneycontrol.com/news/example-metal"
+   }
+  ]
+ },
+ "analysis": {
+  "kind": "brief",
+  "title": "What's driving it",
+  "bullets": [
+   "Sample AI bullet 1 (harness)",
+   "Sample AI bullet 2 (harness)",
+   "Sample AI bullet 3 (harness)"
+  ]
+ },
+ "telegram_html": "<b>🕑 Afternoon Update</b>\n<i>Thu 26 Nov 2026 · 01:37 PM IST</i>\n\n<b>📈 Market so far</b>\n🟢 <b>Nifty 50</b>  25,873.45  +145.20 (+0.56%)\n      Range 25,731.00 – 25,902.80\n🟢 <b>Sensex</b>  84,912.60  +431.80 (+0.51%)\n      Range 84,470.30 – 85,020.10\n🟢 <b>Bank Nifty</b>  58,912.30  +402.15 (+0.69%)\n      Range 58,480.20 – 58,990.50\n🌡 <b>India VIX</b>  11.42 (-3.22%)\n📊 Nifty 50 breadth: 33 up / 17 down\n\n<b>🔥 Nifty 50 top movers</b>\n  🟢 TATASTEEL +3.12% · INFY +2.41% · HINDALCO +2.05%\n  🔴 SUNPHARMA -1.44% · DLF -1.21% · ITC -0.82%\n\n<b>🏭 Sectors today</b>\n  <i>Strongest</i>\n  🟢 Metal +1.64%, 1W +3.20%\n  🟢 IT +1.21%, 1W +2.60%\n  🟢 PSU Bank +1.05%, 1W +2.10%\n  <i>Weakest</i>\n  🔴 Realty -1.18%, 1W -2.40%\n  🔴 Media -0.65%, 1W -1.90%\n  🔴 Pharma -0.42%, 1W -1.10%\n\n<b>📰 News</b>\n  • US CPI cools to 2.6%, Treasury yields slip <i>(Livemint)</i>\n  • FPIs turn net sellers for third session as dollar firms <i>(Economic Times)</i>\n  • Metal stocks extend rally on China stimulus hopes <i>(Moneycontrol)</i>\n\n<b>🤖 What's driving it</b>\n  • Sample AI bullet 1 (harness)\n  • Sample AI bullet 2 (harness)\n  • Sample AI bullet 3 (harness)\n\n<i>⚠️ Not financial advice. Do your own research.</i>"
+}

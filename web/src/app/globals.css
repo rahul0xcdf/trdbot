@@ -1,0 +1,178 @@
+@import "tailwindcss";
+@import "@fontsource-variable/archivo/wght.css";
+
+/*
+ * Design tokens taken from stash.aruo.dev (its :root custom properties):
+ * near-black ground, warm off-white text, one amber accent, muted green /
+ * salmon for up / down, hairline borders, Archivo. Laid out like a native
+ * app: big rounded cards, large titles, generous touch targets.
+ */
+@theme {
+  --color-bg: #070707;
+  --color-bg-sunk: #040404;
+  --color-surface: #0d0d0c;
+  --color-raised: #141413;
+  --color-hover: #1a1a19;
+  --color-line: #efefeb14;
+  --color-line-strong: #efefeb29;
+  --color-ink: #efefeb;
+  --color-ink-2: #b4b4b0;
+  --color-dim: #8b8b88;
+  --color-faint: #5e5e5b;
+  --color-accent: #e0a95b;
+  --color-accent-hi: #ecbf80;
+  --color-accent-ink: #1a1206;
+  --color-accent-muted: #e0a95b1f;
+  --color-accent-line: #e0a95b73;
+  --color-up: #9cc29a;
+  --color-up-muted: #9cc29a1f;
+  --color-down: #e58c7a;
+  --color-down-muted: #e58c7a1f;
+  --color-info: #a9b8c9;
+
+  --font-sans: "Archivo Variable", "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Archivo Variable", "Archivo", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 20px;
+  --text-2xs: 11px;
+  --text-xs: 12.5px;
+  --text-sm: 14px;
+  --text-base: 15px;
+  --color-card: #111110;
+  --color-card-2: #181817;
+}
+
+html {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.45;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+::selection {
+  background: var(--color-accent-muted);
+  color: var(--color-accent-hi);
+}
+
+@layer components {
+/* Numbers: tabular figures so live values never jump */
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Stash-style eyebrow: a short rule, then tracked uppercase */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-2xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-dim);
+  font-weight: 500;
+}
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--color-ink);
+}
+.eyebrow::before {
+  content: "";
+  width: 14px;
+  height: 1px;
+  background: var(--color-line-strong);
+}
+
+.panel {
+  background: var(--color-card);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+}
+
+.hairline {
+  border-color: var(--color-line);
+}
+
+}
+
+/* Quiet scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #efefeb1f transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #efefeb1a;
+  border-radius: 8px;
+}
+
+@layer components {
+/* Horizontal snap rails for mobile cards */
+.rail {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.rail::-webkit-scrollbar {
+  display: none;
+}
+.rail > * {
+  scroll-snap-align: start;
+  flex: none;
+}
+
+}
+
+/* Value flash when a live number changes (direction-aware) */
+@keyframes flash-up {
+  from { background: var(--color-up-muted); }
+  to { background: transparent; }
+}
+@keyframes flash-down {
+  from { background: var(--color-down-muted); }
+  to { background: transparent; }
+}
+.flash-up { animation: flash-up 1.2s ease-out; border-radius: 4px; }
+.flash-down { animation: flash-down 1.2s ease-out; border-radius: 4px; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.live-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+@layer components {
+/* Linked cards lift 2px; buttons press (Taste Skill's quiet hover layer) */
+.lift { transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease; }
+.lift:hover { transform: translateY(-2px); border-color: var(--color-line-strong); }
+.press { transition: transform 90ms ease, background-color 120ms ease, border-color 120ms ease; }
+.press:active { transform: scale(0.97); }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Safe-area padding for the mobile bottom nav */
+.pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+
+/* Telegram HTML as sent (only b / i / code survive sanitising) */
+.tg-html { white-space: pre-wrap; font-size: var(--text-sm); color: var(--color-ink-2); }
+.tg-html b { color: var(--color-ink); font-weight: 600; }
+.tg-html i { color: var(--color-dim); }
